@@ -2,15 +2,78 @@
   Context Project BLE Login Device
 */
 
+#define DUMP(str, i, buf, sz) { Serial.println(str); \
+    for(i=0; i<(sz); ++i) { if(buf[i]<0x10) Serial.print('0'); Serial.print(char(buf[i]), HEX); } \
+    Serial.println(); } //Help function for printing the Output
+
+#define DEBUG_ENABLED
+
+// Libraries
 #include <RFduinoBLE.h>
+#include <aes256.h>
+#include <limits.h>
+#include <FiniteStateMachine.h>
 
-bool shouldSend = false;
+// Variables
 String inputString = "";
+int i;
 
-void setup() 
+String sentRandom;
+String serverRandom;
+String serverCipher;
+bool cipherOK = false;
+
+// AES Encryption and Decryption
+aes256_context ctxt;
+uint8_t keyOne[] = { //
+  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+  0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+};
+
+uint8_t keyTwo[] = { //
+  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+  0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
+};
+
+/* State machine */
+State Advertising = State(advertising, NULL, NULL);
+State Connected = State(didConnect);
+State WaitingForCipher = State(waitingCipher);
+State WaitingForRandom = State(waitingRandom);
+
+FSM stateMachine = FSM(Advertising);
+
+/* Arduino main functions */
+
+void setup()
 {
   // Setup serial
   Serial.begin(9600);
+  
+  // Test the AES
+  // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
+  //DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
+}
+
+void loop()
+{
+  stateMachine.update();
+}
+
+/* States */
+
+void advertising()
+{
+  // Reset everything
+  serverCipher = "";
+  serverRandom = "";
+  sentRandom = "";
+
+  Serial.println("---In advertising state---");
 
   // Broadcast Bluetooth
   RFduinoBLE.advertisementData = "EA8F2A44";
@@ -18,91 +81,253 @@ void setup()
   RFduinoBLE.begin();
 }
 
-void loop() 
+void didConnect()
 {
-  RFduino_ULPDelay(SECONDS(1));
-  if (shouldSend == true) {
-    sendMessage("9AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F059AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F059AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F059AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F05");
+  uint8_t hexString[16];
+  generate256BitRandom(hexString);
+
+  String hexMessage = stringFromUInt8(hexString);
+  
+  sentRandom = hexMessage;
+  PrintMessage("Sending Random Number (State Connected)", true);
+  PrintMessage(hexMessage, true);
+  sendMessage(hexMessage);
+  stateMachine.transitionTo(WaitingForCipher);
+}
+
+void waitingCipher()
+{
+  if (serverCipher != "") {
+    PrintMessage("---Decoding received cipher--", true);
+    uint8_t hexString[16];
+    
+    // Convert the string to uint8
+    uint8FromString(serverCipher, hexString);
+    decryptMessage(0, hexString);
+    
+    // Convert the uint8 back to a string
+    String decryptedString = stringFromUInt8(hexString);
+    PrintMessage(decryptedString, true);
+    
+    if (decryptedString == sentRandom) {
+      PrintMessage("Got the correct random value", true);
+      sendMessage("OK");
+      stateMachine.transitionTo(WaitingForRandom);
+    } else {
+       Serial.println("Incorrect random, fuck off server");
+      stateMachine.transitionTo(Advertising);
+    }
   }
 }
 
-void receivedMessage(String message)
-{ 
-  Serial.println(message);
-  String testCase = "9AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F059AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F059AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F059AD6368489A9A856D0E454641521DA3F56F5F9E9CAEF7AF60E84ABD1F1901F05";
-  if(testCase == message) {
-    Serial.println("Test case passed");
-  } 
+void waitingRandom()
+{
+  if (serverRandom != "") {
+    PrintMessage("---Encrypting received random--", true);
+    uint8_t hexString[16];
+    
+    // Convert the string to uint8
+    uint8FromString(serverRandom, hexString);
+    encryptMessage(0, hexString);
+    
+    // Convert the uint8 back to a string
+    String encryptedString = stringFromUInt8(hexString);
+    PrintMessage("Calculated an encrypted value of: ", true);
+    Serial.println(encryptedString);
+    PrintMessage(encryptedString, true);
+    
+    sendMessage(encryptedString);
+    stateMachine.transitionTo(Advertising);
+  }
 }
 
-void RFduinoBLE_onReceive(char *data, int len) 
-{    
+/* RFDuino Callbacks */
+
+void RFduinoBLE_onConnect()
+{
+  stateMachine.transitionTo(Connected);
+}
+
+void RFduinoBLE_onDisconnect()
+{
+  PrintMessage("Disconnected", true);
+  stateMachine.transitionTo(Advertising);
+}
+
+/* Sending and receiving */
+
+void receivedMessage(String message)
+{
+   PrintMessage("---Received message--", true);
+   PrintMessage(message, true);
+
+  if (stateMachine.isInState(WaitingForCipher)) {
+    serverCipher = message;
+  } else if (stateMachine.isInState(WaitingForRandom)) {
+    serverRandom = message;
+  } else {
+    PrintMessage("Unknown state", true);
+  }
+}
+
+/* RFduino sending and receiving */
+void sendMessage(String messageToSend)
+{
+  // The MTU for RFDuino is 20 bytes
+  int stringLength = messageToSend.length();
+
+  String currentSubMessage = "1";
+  int msgSize = 19;
+  if (stringLength < 19) msgSize = stringLength;
+
+  currentSubMessage += messageToSend.substring(0, msgSize + 1);
+
+  char currentSubMessageArray[currentSubMessage.length() + 1];
+  currentSubMessage.toCharArray(currentSubMessageArray, currentSubMessage.length() + 1);
+
+  while (!RFduinoBLE.send(currentSubMessageArray, msgSize + 1));
+
+  int messagesToSend = ceil((float)stringLength / (float)19);
+
+  for (int i = 1; i < messagesToSend; i++) {
+    currentSubMessage = "2";
+
+    if ((i * 19 + 19) > stringLength) {
+      msgSize = stringLength - (i * 19);
+    }
+
+    currentSubMessage += messageToSend.substring(i * 19, (i * 19) + msgSize + 1);
+
+    char currentSubMessageArray[currentSubMessage.length() + 1];
+    currentSubMessage.toCharArray(currentSubMessageArray, currentSubMessage.length() + 1);
+    while (!RFduinoBLE.send(currentSubMessageArray, msgSize + 1));
+  }
+
+  while (!RFduinoBLE.send('3'));
+}
+
+void RFduinoBLE_onReceive(char *data, int len)
+{
   // Start of message
   if (data[0] == '1') {
     inputString = "";
     for (int i = 1; i < len; i++) {
       inputString += data[i];
     }
-  } 
- 
+  }
+
   // Data
   if (data[0] == '2') {
     for (int i = 1; i < len; i++) {
       inputString += data[i];
     }
-  }  
-  
+  }
+
   // EOM
   if (data[0] == '3') {
     if (inputString != "") {
       receivedMessage(inputString);
-    }  
+    }
   }
 }
 
-void RFduinoBLE_onConnect() 
-{    
-  shouldSend = true;
+/* AES Encryption and Decryption */
+
+void encryptMessage(int key, uint8_t data[16])
+{
+  // Setup the keys
+  if (key == 0) {
+    aes256_init(&ctxt, keyOne);
+  } else if (key == 1) {
+    aes256_init(&ctxt, keyTwo);
+  } else {
+    PrintMessage("Unknown key specified", true);
+  }
+
+  // Do the actual encryption
+  DUMP("Unencrypted data: ", i, data, sizeof(data) * 4);
+  PrintMessage("---Encrypting---", true);
+  aes256_encrypt_ecb(&ctxt, data);
+  DUMP("Encrypted data: ", i, data, sizeof(data) * 4);
+
+  // Clean up
+  aes256_done(&ctxt);
 }
 
-void sendMessage(String messageToSend) {
-  // The MTU for RFDuino is 20 bytes
-  int stringLength = messageToSend.length(); 
-  
-  String currentSubMessage = "1";
-  int msgSize = 19;
-  if (stringLength < 19) msgSize = stringLength;
+void decryptMessage(int key, uint8_t data[16])
+{
+  // Setup the keys
+  if (key == 0) {
+    aes256_init(&ctxt, keyOne);
+  } else if (key == 1) {
+    aes256_init(&ctxt, keyTwo);
+  } else {
+    PrintMessage("Unknown key specified", true);
+  }
 
-  currentSubMessage += messageToSend.substring(0, msgSize+1);
+  // Do the actual encryption
+  DUMP("Encrypted data: ", i, data, sizeof(data) * 4);
+  PrintMessage("---Decrypting---", true);
+  aes256_decrypt_ecb(&ctxt, data);
+  DUMP("Unencrypted data: ", i, data, sizeof(data) * 4);
+
+  // Clean up
+  aes256_done(&ctxt);
+}
+
+/* Utilities */
+
+void generate256BitRandom(uint8_t* data)
+{
+  unsigned long randomValue = micros();
+  randomSeed(randomValue);
+
+  long r = random(LONG_MAX);
+  long r1 = random(LONG_MAX);
+  long r2 = random(LONG_MAX);
+  long r3 = random(LONG_MAX);
+
+  memcpy(data, &r, 4);
+  memcpy(data + 4, &r1, 4);
+  memcpy(data + 8, &r2, 4);
+  memcpy(data + 12, &r3, 4);
+}
+
+String stringFromUInt8(uint8_t* data)
+{
+  String hexMessage = "";
+  String newString;
   
-  char currentSubMessageArray[currentSubMessage.length()+1];
-  currentSubMessage.toCharArray(currentSubMessageArray, currentSubMessage.length()+1);
-  
-  Serial.println(currentSubMessageArray);
-  while(!RFduinoBLE.send(currentSubMessageArray, msgSize+1));
-  
-  int messagesToSend = ceil((float)stringLength / (float)19);
-  
-  for (int i = 1; i < messagesToSend; i++) {
-    currentSubMessage = "2";
-    
-    if ((i*19+19) > stringLength) {
-     // Serial.println("%d is longer than %d", (i*19+19), stringLength);
-      msgSize = stringLength - (i*19);
-     // Serial.println("Using a value of %d for msgSize", msgSize);
-    } 
-    
-    currentSubMessage += messageToSend.substring(i*19, (i*19)+msgSize+1);
-    
-    char currentSubMessageArray[currentSubMessage.length()+1];
-    currentSubMessage.toCharArray(currentSubMessageArray, currentSubMessage.length()+1);
-    Serial.println(currentSubMessageArray);
-    while(!RFduinoBLE.send(currentSubMessageArray, msgSize+1));
+  for (int i = 0; i < sizeof(data) * 4; i++) {
+    newString = "";
+    // Special case for 0
+    if(data[i]<0x10) 
+      newString += "0";
+    newString += String(char(data[i]), HEX);
+    hexMessage += newString;
   }
   
-  while(!RFduinoBLE.send('3'));
+  hexMessage.toUpperCase();
   
-  shouldSend = false;
- 
+  return hexMessage;
 }
 
+void uint8FromString(String message, uint8_t* data)
+{
+  for (int i = 0; i < message.length(); i = i+2) {
+    String internalString = message.substring(i, i+2);
+    char buf[2];
+    internalString.toCharArray(buf, 2+1);
+    data[i/2] = strtol(buf, NULL, 16);
+  }
+}
+
+void PrintMessage(String message, bool newLine)
+{
+ #ifdef DEBUG_ENABLED
+   if (newLine == true)
+     Serial.println(message);
+   else
+     Serial.print(message);
+ #endif
+}
