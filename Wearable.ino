@@ -44,6 +44,7 @@ State Advertising = State(advertising, NULL, NULL);
 State Connected = State(didConnect);
 State WaitingForCipher = State(waitingCipher);
 State WaitingForRandom = State(waitingRandom);
+State ResetVariables = State(resetVariables, NULL, NULL);
 
 FSM stateMachine = FSM(Advertising);
 
@@ -53,7 +54,7 @@ void setup()
 {
   // Setup serial
   Serial.begin(9600);
-  
+
   // Test the AES
   // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
   //DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
@@ -73,7 +74,7 @@ void advertising()
   serverRandom = "";
   sentRandom = "";
 
-  Serial.println("---In advertising state---");
+  Serial.println(F("---In advertising state---"));
 
   // Broadcast Bluetooth
   RFduinoBLE.advertisementData = "EA8F2A44";
@@ -83,14 +84,16 @@ void advertising()
 
 void didConnect()
 {
+  Serial.println(F("---In connected state---"));
+
   uint8_t hexString[16];
   generate256BitRandom(hexString);
 
   String hexMessage = stringFromUInt8(hexString);
-  
+
   sentRandom = hexMessage;
-  PrintMessage("Sending Random Number (State Connected)", true);
-  PrintMessage(hexMessage, true);
+  Serial.println(F("Sending Random Number"));
+  Serial.println(hexMessage);
   sendMessage(hexMessage);
   stateMachine.transitionTo(WaitingForCipher);
 }
@@ -98,23 +101,23 @@ void didConnect()
 void waitingCipher()
 {
   if (serverCipher != "") {
-    PrintMessage("---Decoding received cipher--", true);
+    Serial.println(F("---Decoding received cipher--"));
     uint8_t hexString[16];
-    
+
     // Convert the string to uint8
     uint8FromString(serverCipher, hexString);
     decryptMessage(0, hexString);
-    
+
     // Convert the uint8 back to a string
     String decryptedString = stringFromUInt8(hexString);
-    PrintMessage(decryptedString, true);
-    
+    Serial.println(decryptedString);
+
     if (decryptedString == sentRandom) {
-      PrintMessage("Got the correct random value", true);
+      Serial.println(F("Got the correct random value"));
       sendMessage("OK");
       stateMachine.transitionTo(WaitingForRandom);
     } else {
-       Serial.println("Incorrect random, fuck off server");
+      Serial.println(F("Incorrect random, fuck off server"));
       stateMachine.transitionTo(Advertising);
     }
   }
@@ -123,23 +126,32 @@ void waitingCipher()
 void waitingRandom()
 {
   if (serverRandom != "") {
-    PrintMessage("---Encrypting received random--", true);
+    Serial.println(F("---Encrypting received random--"));
     uint8_t hexString[16];
-    
+
     // Convert the string to uint8
     uint8FromString(serverRandom, hexString);
     encryptMessage(0, hexString);
-    
+
     // Convert the uint8 back to a string
     String encryptedString = stringFromUInt8(hexString);
-    PrintMessage("Calculated an encrypted value of: ", true);
-    Serial.println(encryptedString);
-    PrintMessage(encryptedString, true);
-    
+
     sendMessage(encryptedString);
-    stateMachine.transitionTo(Advertising);
+    Serial.println("Sending encrypted string");
+        
+    stateMachine.transitionTo(ResetVariables);
   }
 }
+
+void resetVariables()
+{
+  Serial.println(F("---In reset state---"));
+
+  serverCipher = "";
+  serverRandom = "";
+  sentRandom = "";
+}
+
 
 /* RFDuino Callbacks */
 
@@ -150,23 +162,23 @@ void RFduinoBLE_onConnect()
 
 void RFduinoBLE_onDisconnect()
 {
-  PrintMessage("Disconnected", true);
-  stateMachine.transitionTo(Advertising);
+  Serial.println(F("Disconnected"));
+ // stateMachine.immediateTransitionTo(Advertising);
 }
 
 /* Sending and receiving */
 
 void receivedMessage(String message)
 {
-   PrintMessage("---Received message--", true);
-   PrintMessage(message, true);
+  Serial.println(F("---Received message--"));
+  Serial.println(message);
 
   if (stateMachine.isInState(WaitingForCipher)) {
     serverCipher = message;
   } else if (stateMachine.isInState(WaitingForRandom)) {
     serverRandom = message;
   } else {
-    PrintMessage("Unknown state", true);
+    Serial.println(F("Unknown state"));
   }
 }
 
@@ -241,15 +253,15 @@ void encryptMessage(int key, uint8_t data[16])
   } else if (key == 1) {
     aes256_init(&ctxt, keyTwo);
   } else {
-    PrintMessage("Unknown key specified", true);
+    Serial.println(F("Unknown key specified"));
   }
 
   // Do the actual encryption
-  DUMP("Unencrypted data: ", i, data, sizeof(data) * 4);
-  PrintMessage("---Encrypting---", true);
+  DUMP(F("Unencrypted data: "), i, data, sizeof(data) * 4);
+  Serial.println(F("---Encrypting---"));
   aes256_encrypt_ecb(&ctxt, data);
-  DUMP("Encrypted data: ", i, data, sizeof(data) * 4);
-
+  DUMP(F("Encrypted data: "), i, data, sizeof(data) * 4);
+  
   // Clean up
   aes256_done(&ctxt);
 }
@@ -262,14 +274,14 @@ void decryptMessage(int key, uint8_t data[16])
   } else if (key == 1) {
     aes256_init(&ctxt, keyTwo);
   } else {
-    PrintMessage("Unknown key specified", true);
+    Serial.println(F("Unknown key specified"));
   }
 
   // Do the actual encryption
-  DUMP("Encrypted data: ", i, data, sizeof(data) * 4);
-  PrintMessage("---Decrypting---", true);
+  DUMP(F("Encrypted data: "), i, data, sizeof(data) * 4);
+  Serial.println(F("---Decrypting---"));
   aes256_decrypt_ecb(&ctxt, data);
-  DUMP("Unencrypted data: ", i, data, sizeof(data) * 4);
+  DUMP(F("Unencrypted data: "), i, data, sizeof(data) * 4);
 
   // Clean up
   aes256_done(&ctxt);
@@ -297,37 +309,27 @@ String stringFromUInt8(uint8_t* data)
 {
   String hexMessage = "";
   String newString;
-  
+
   for (int i = 0; i < sizeof(data) * 4; i++) {
     newString = "";
     // Special case for 0
-    if(data[i]<0x10) 
+    if (data[i] < 0x10)
       newString += "0";
     newString += String(char(data[i]), HEX);
     hexMessage += newString;
   }
-  
+
   hexMessage.toUpperCase();
-  
+
   return hexMessage;
 }
 
 void uint8FromString(String message, uint8_t* data)
 {
-  for (int i = 0; i < message.length(); i = i+2) {
-    String internalString = message.substring(i, i+2);
+  for (int i = 0; i < message.length(); i = i + 2) {
+    String internalString = message.substring(i, i + 2);
     char buf[2];
-    internalString.toCharArray(buf, 2+1);
-    data[i/2] = strtol(buf, NULL, 16);
+    internalString.toCharArray(buf, 2 + 1);
+    data[i / 2] = strtol(buf, NULL, 16);
   }
-}
-
-void PrintMessage(String message, bool newLine)
-{
- #ifdef DEBUG_ENABLED
-   if (newLine == true)
-     Serial.println(message);
-   else
-     Serial.print(message);
- #endif
 }
