@@ -118,6 +118,7 @@ void waitingCipher()
       stateMachine.transitionTo(WaitingForRandom);
     } else {
       Serial.println(F("Incorrect random, fuck off server"));
+      RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
     }
   }
@@ -299,10 +300,10 @@ void generate256BitRandom(uint8_t* data)
   long r2 = random(LONG_MAX);
   long r3 = random(LONG_MAX);
 
-  memcpy(data, &r, 4);
-  memcpy(data + 4, &r1, 4);
-  memcpy(data + 8, &r2, 4);
-  memcpy(data + 12, &r3, 4);
+  memcpy(data, &r, sizeof(long));
+  memcpy(data + 4, &r1, sizeof(long));
+  memcpy(data + 8, &r2, sizeof(long));
+  memcpy(data + 12, &r3, sizeof(long));
 }
 
 String stringFromUInt8(uint8_t* data)
