@@ -13,6 +13,11 @@
 #include <aes256.h>
 #include <limits.h>
 #include <FiniteStateMachine.h>
+#include <elapsedMillis.h>
+
+// Disconnect automatically after 5s
+elapsedMillis interruptTimer;
+#define interval 5000
 
 // Variables
 String inputString = "";
@@ -25,14 +30,14 @@ bool cipherOK = false;
 
 // AES Encryption and Decryption
 aes256_context ctxt;
-uint8_t keyOne[] = { //
+uint8_t keyOne[] = {
   0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
   0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
   0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
   0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
 };
 
-uint8_t keyTwo[] = { //
+uint8_t keyTwo[] = {
   0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
   0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
   0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -42,8 +47,8 @@ uint8_t keyTwo[] = { //
 /* State machine */
 State Advertising = State(advertising, NULL, NULL);
 State Connected = State(didConnect);
-State WaitingForCipher = State(waitingCipher);
-State WaitingForRandom = State(waitingRandom);
+State WaitingForCipher = State(resetTimer, waitingCipher, NULL);
+State WaitingForRandom = State(resetTimer, waitingRandom, NULL);
 State ResetVariables = State(resetVariables, NULL, NULL);
 
 FSM stateMachine = FSM(Advertising);
@@ -57,7 +62,7 @@ void setup()
 
   // Test the AES
   // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
-  //DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
+  // DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
 }
 
 void loop()
@@ -98,6 +103,11 @@ void didConnect()
   stateMachine.transitionTo(WaitingForCipher);
 }
 
+void resetTimer()
+{
+  interruptTimer = 0;
+}
+
 void waitingCipher()
 {
   if (serverCipher != "") {
@@ -122,6 +132,12 @@ void waitingCipher()
       stateMachine.transitionTo(Advertising);
     }
   }
+  
+  if (interruptTimer > interval) {
+    Serial.println(F("Didn't receive ciphertext, disconnecting."));
+    RFduinoBLE.end();
+    stateMachine.transitionTo(Advertising);
+  }
 }
 
 void waitingRandom()
@@ -140,6 +156,12 @@ void waitingRandom()
     sendMessage(encryptedString);
     Serial.println("Sending encrypted string");
         
+    stateMachine.transitionTo(ResetVariables);
+  }
+  
+  if (interruptTimer > interval) {
+    Serial.println(F("Didn't receive random challenge, disconnecting."));
+    RFduinoBLE.end();
     stateMachine.transitionTo(ResetVariables);
   }
 }
@@ -164,7 +186,7 @@ void RFduinoBLE_onConnect()
 void RFduinoBLE_onDisconnect()
 {
   Serial.println(F("Disconnected"));
- // stateMachine.immediateTransitionTo(Advertising);
+  //stateMachine.immediateTransitionTo(Advertising);
 }
 
 /* Sending and receiving */
