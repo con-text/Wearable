@@ -85,11 +85,27 @@ uint8_t aes132m_temp_sense(uint16_t *temp_diff)
  */
 uint8_t aes132m_block_read(uint16_t word_address, uint8_t n_bytes, uint8_t *result)
 {
-	uint8_t command[AES132_COMMAND_SIZE_MIN] = {AES132_COMMAND_SIZE_MIN, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	uint8_t command[AES132_COMMAND_SIZE_MIN] = {AES132_COMMAND_SIZE_MIN, AES132_OPCODE_BLOCK_READ, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 	command[AES132_COMMAND_INDEX_PARAM1_MSB] = word_address >> 8;
 	command[AES132_COMMAND_INDEX_PARAM1_LSB] = word_address & 0xFF;
 	command[AES132_COMMAND_INDEX_PARAM2_LSB] = n_bytes;
 
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_BLOCK_READ + n_bytes, result, AES132_OPTION_DEFAULT);
+}
+
+
+/** This function sends a BlockRead command and receives the read data.
+ *
+ * @param[in] word_address start address to read from
+ * @param[in] n_bytes number of bytes to read
+ * @param[out] result pointer to read buffer
+ * @return status of the operation
+ */
+uint8_t aes132m_random(uint8_t *result)
+{
+	byte mode = B00000010;
+	uint8_t command[AES132_COMMAND_SIZE_MIN] = {AES132_COMMAND_SIZE_MIN, AES132_OPCODE_RANDOM, mode, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN + 16, result, AES132_OPTION_DEFAULT);
 }

@@ -88,5 +88,6 @@
 uint8_t aes132m_block_read(uint16_t word_address, uint8_t n_bytes, uint8_t *result);
 uint8_t aes132m_info(uint8_t selector, uint8_t *result);
 uint8_t aes132m_temp_sense(uint16_t *temp_diff);
+uint8_t aes132m_random(uint8_t *result);
 
 #endif

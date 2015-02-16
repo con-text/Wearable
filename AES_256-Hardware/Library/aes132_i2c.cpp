@@ -142,19 +142,6 @@ uint8_t i2c_receive_bytes(uint8_t count, uint8_t *data)
 	return I2C_FUNCTION_RETCODE_SUCCESS;
 }
 
-/** \brief This function initializes and enables the I2C hardware peripheral. */
-void aes132p_enable_interface(void)
-{
-	i2c_enable();
-}
-
-
-/** \brief This function disables the I2C hardware peripheral. */
-void aes132p_disable_interface(void)
-{
-	i2c_disable();
-}
-
 /** \brief This function writes bytes to the device.
  * \param[in] count number of bytes to write
  * \param[in] word_address word address to write to
