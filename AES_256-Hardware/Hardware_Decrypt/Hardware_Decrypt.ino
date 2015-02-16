@@ -12,19 +12,17 @@ void setup() {
   while (!Serial);
 
   Wire.begin();
-    
-  i2c_enable(); 
-  
+      
   uint16_t address = 0xF040;
-  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN + 1];
+  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN + 1] = {0};
   aes132m_block_read(address, 1, rxBuffer);
+  delay(100);
  // uint16_t address = 0xF010;
   //aes132c_wri(address, 2, rx_buffer);
   
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
   } 
-  
  
    //getInfo();
    //calculateTemperature();

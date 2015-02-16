@@ -218,11 +218,13 @@ uint8_t aes132c_wait_for_status_register_bit(uint8_t mask, uint8_t is_set, uint1
 			}
 
 		} else {
-			Serial.println("Wait for device to boot up");
 			// Wait for the mask bit(s) being cleared.
 			if ((device_status_register & mask) == 0) {
+				Serial.println("Device booted up");
 				// Mask pattern has been found in device status register. Return success.
 				return aes132_lib_return;
+			} else {
+				Serial.println("Waiting for device to boot up");
 			}
 		}
 
@@ -371,6 +373,7 @@ uint8_t aes132c_access_memory(uint8_t count, uint16_t word_address, uint8_t *dat
 					return aes132_lib_return;
 			} else {
 				// Read from the device.
+				Serial.println("Calling aes132p_read_memory_physical");
 				aes132_lib_return = aes132p_read_memory_physical(count, word_address, data);
 				if (aes132_lib_return == AES132_FUNCTION_RETCODE_SUCCESS)
 					return aes132_lib_return;
@@ -563,10 +566,11 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 		// Check CRC.
 		crc_index = count_byte - AES132_CRC_SIZE;
 		aes132c_calculate_crc(crc_index, response, crc);
-		if ((crc[0] == response[crc_index]) && (crc[1] == response[crc_index + 1]))
+		if ((crc[0] == response[crc_index]) && (crc[1] == response[crc_index + 1])) {
 			// We received a consistent response packet. Return the response return code.
 			Serial.println("Received good response");
 			return response[AES132_RESPONSE_INDEX_RETURN_CODE];
+		}
 
 		// Received and calculated CRC do not match. Retry reading the response buffer.
 		aes132_lib_return = AES132_FUNCTION_RETCODE_BAD_CRC_RX;
@@ -593,9 +597,10 @@ uint8_t aes132c_send_and_receive(uint8_t *command, uint8_t size, uint8_t *respon
 {
 	Serial.println("Entered send n recv");
 	uint8_t aes132_lib_return = aes132c_send_command(command, options);
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
+	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
 		Serial.println("Error sending command, in aes132c_send_and_receive()");
 		return aes132_lib_return;
+	}
 
 	return aes132c_receive_response(size, response);
 }
