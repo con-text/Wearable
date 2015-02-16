@@ -170,7 +170,6 @@ uint8_t aes132c_read_device_status_register(uint8_t *device_status_register)
 	uint8_t n_retries = AES132_RETRY_COUNT_ERROR;
 
 	do {
-		Serial.println("Calling aes132p_read_memory_physical in read_device_status_register");
 		aes132_lib_return = aes132p_read_memory_physical(1, AES132_STATUS_ADDR, device_status_register);
 	} while ((aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) && (--n_retries > 0));
 
@@ -210,11 +209,13 @@ uint8_t aes132c_wait_for_status_register_bit(uint8_t mask, uint8_t is_set, uint1
 		}
 
 		if (is_set == AES132_BIT_SET) {
-			Serial.println("Wait for bit set");
 			// Wait for the mask bit(s) being set.
 			if ((device_status_register & mask) == mask) {
+				Serial.println("Response is ready");
 				// Mask pattern has been found in device status register. Return success.
 				return aes132_lib_return;
+			} else {
+				Serial.println("Wait for response ready bit");
 			}
 
 		} else {
@@ -533,6 +534,10 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 		}
 
 		count_byte = response[AES132_RESPONSE_INDEX_COUNT];
+		Serial.print("---Count byte---");
+		Serial.println(count_byte);
+		Serial.print("---Size---");
+		Serial.println(size);
 		if (count_byte > size) {
 			// The buffer provided by the caller is not big enough to store the entire response,
 			// or the count value got corrupted due to a bad communication channel.
@@ -548,6 +553,7 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 			// A response has to be between #AES132_RESPONSE_SIZE_MIN and #AES132_RESPONSE_SIZE_MAX bytes long to be valid.
 			// Re-synchronize and retry.
 			aes132_lib_return = AES132_FUNCTION_RETCODE_COUNT_INVALID;
+			Serial.println("The response wasn't in the range");
 			// Do not override aes132_lib_return.
 			(void) aes132c_resync();
 			continue;
@@ -559,6 +565,7 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 			// Reading the remainder of the response failed. We might have lost communication.
 			// Re-synchronize and retry.
 			// Do not override the return value from the call to aes132p_read_memory_physical.
+			Serial.println("Reading the rest of the response failed");
 			(void) aes132c_resync();
 			continue;
 		}
@@ -574,6 +581,8 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 
 		// Received and calculated CRC do not match. Retry reading the response buffer.
 		aes132_lib_return = AES132_FUNCTION_RETCODE_BAD_CRC_RX;
+		Serial.println("Incorrect CRC");
+
 
 		// Do not override aes132_lib_return.
 		(void) aes132c_resync();

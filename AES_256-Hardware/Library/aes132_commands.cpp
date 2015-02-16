@@ -119,7 +119,7 @@ uint8_t aes132m_random(uint8_t *result)
  */
 uint8_t writeKey(uint8_t *key, uint16_t keyID)
 {
-	uint16_t address = 0xF200;
+	uint16_t address = 0xF210;
 	// First write the key to memory
 	aes132c_write_memory(16, address, key);
 
@@ -129,7 +129,7 @@ uint8_t writeKey(uint8_t *key, uint16_t keyID)
 	keyConfig[1] = B11011000;
 	keyConfig[2] = B00000000;
 	keyConfig[3] = B00000000;
-	address = 0xF080;
+	address = 0xF084;
 	aes132c_write_memory(sizeof(keyConfig), address, (uint8_t*)&keyConfig);
 }
 
@@ -137,11 +137,14 @@ uint8_t encrypt(uint8_t *result)
 {
 	byte mode = B11100000;
 
-	uint8_t command[AES132_COMMAND_SIZE_MIN+5] = {AES132_COMMAND_SIZE_MIN+5, AES132_OPCODE_ENCRYPT, mode, 0x00, 0x00, 0x00, 0x00, 
-													0x68, 0x65, 0x79, 0x79, 0x79,
+	uint8_t command[AES132_COMMAND_SIZE_MIN+16] = {AES132_COMMAND_SIZE_MIN+16, AES132_OPCODE_ENCRYPT, mode, 0x00, 0x01, 0x00, 0x00, 
+													0x68, 0x65, 0x79, 0x79, 
+													0x79, 0x79, 0x79, 0x79,
+													0x79, 0x79, 0x79, 0x79,
+													0x79, 0x79, 0x79, 0x79,
 													0x00, 0x00};
 
-	command[AES132_COMMAND_INDEX_PARAM2_LSB] = 0x05;
+	command[AES132_COMMAND_INDEX_PARAM2_LSB] = 0x10;
 
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN + 32, result, AES132_OPTION_DEFAULT);
 }

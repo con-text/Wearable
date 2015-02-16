@@ -23,18 +23,18 @@ void setup() {
  // uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN + 16] = {0};
   //aes132m_block_read(address, 16, rxBuffer);
   
-/*  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN] = {0};
+  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer);
   delay(100);
   
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
-  } */
+  }
   
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN + 32] = {0};
   encrypt(rxBuffer2);
   
-  delay(100);
+  delay(500);
   
   for (int i = 0; i < sizeof(rxBuffer2); i++) {
     Serial.println(rxBuffer2[i], HEX);

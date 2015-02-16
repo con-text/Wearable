@@ -72,9 +72,6 @@ uint8_t i2c_send_stop(void)
 
  	delay(10);
 
- 	Serial.print("Stop status, returns:");
- 	Serial.println(status);
-
  	if (status == 0) {
  		Serial.println("Stop sent succesfully");
  		return I2C_FUNCTION_RETCODE_SUCCESS;
