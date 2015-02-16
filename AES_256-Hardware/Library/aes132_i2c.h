@@ -182,8 +182,6 @@ uint8_t i2c_receive_byte(uint8_t *data);
 uint8_t i2c_receive_bytes(uint8_t count, uint8_t *data);
 
 uint8_t deviceAddress();
-int start_operation(uint8_t readWrite);
-void chip_wakeup();
 
 void    aes132p_enable_interface(void);
 void    aes132p_disable_interface(void);

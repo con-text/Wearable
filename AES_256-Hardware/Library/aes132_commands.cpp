@@ -109,3 +109,52 @@ uint8_t aes132m_random(uint8_t *result)
 
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN + 16, result, AES132_OPTION_DEFAULT);
 }
+
+/** This function sends a BlockRead command and receives the read data.
+ *
+ * @param[in] word_address start address to read from
+ * @param[in] n_bytes number of bytes to read
+ * @param[out] result pointer to read buffer
+ * @return status of the operation
+ */
+uint8_t writeKey(uint8_t *key, uint16_t keyID)
+{
+	uint16_t address = 0xF200;
+	// First write the key to memory
+	aes132c_write_memory(16, address, key);
+
+	// Write the key config
+	byte keyConfig[4];
+	keyConfig[0] = B00001001;
+	keyConfig[1] = B11011000;
+	keyConfig[2] = B00000000;
+	keyConfig[3] = B00000000;
+	address = 0xF080;
+	aes132c_write_memory(sizeof(keyConfig), address, (uint8_t*)&keyConfig);
+}
+
+uint8_t encrypt(uint8_t *result)
+{
+	byte mode = B11100000;
+
+	uint8_t command[AES132_COMMAND_SIZE_MIN+5] = {AES132_COMMAND_SIZE_MIN+5, AES132_OPCODE_ENCRYPT, mode, 0x00, 0x00, 0x00, 0x00, 
+													0x68, 0x65, 0x79, 0x79, 0x79,
+													0x00, 0x00};
+
+	command[AES132_COMMAND_INDEX_PARAM2_LSB] = 0x05;
+
+	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN + 32, result, AES132_OPTION_DEFAULT);
+}
+
+uint8_t nonce(uint8_t *result) 
+{
+	byte mode = B00000000;
+
+	uint8_t command[AES132_COMMAND_SIZE_MIN+12] = {AES132_COMMAND_SIZE_MIN+12, AES132_OPCODE_NONCE, mode, 0x00, 0x00, 0x00, 0x00, 
+													0x00, 0x00, 0x00, 0x00, 
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00};
+
+	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN, result, AES132_OPTION_DEFAULT);
+}
