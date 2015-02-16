@@ -63,6 +63,7 @@ uint8_t aes132m_temp_sense(uint16_t *temp_diff)
 	const uint8_t command[] = {AES132_COMMAND_SIZE_MIN, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD9, 0x9C};
 	uint8_t response[AES132_RESPONSE_SIZE_TEMP_SENSE];
 
+	Serial.println("Entered temp sense");
 	uint8_t aes132_lib_return = aes132c_send_and_receive((uint8_t *) command,
 				AES132_RESPONSE_SIZE_TEMP_SENSE, response, AES132_OPTION_NO_APPEND_CRC);
 	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)

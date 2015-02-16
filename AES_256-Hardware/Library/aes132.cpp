@@ -197,7 +197,6 @@ uint8_t aes132c_wait_for_status_register_bit(uint8_t mask, uint8_t is_set, uint1
 		i++;
 
 		aes132_lib_return = aes132p_read_memory_physical(1, AES132_STATUS_ADDR, &device_status_register);
-		Serial.println(device_status_register);
 		if (aes132_lib_return == AES132_FUNCTION_RETCODE_ADDRESS_WRITE_NACK) {
 			// The device is busy. Continue polling until "n_retries" is depleted.
 			Serial.println("Device is busy");
@@ -352,10 +351,12 @@ uint8_t aes132c_access_memory(uint8_t count, uint16_t word_address, uint8_t *dat
 					continue;
 
 				// Communication succeeded.
-				if	(word_address >= AES132_IO_ADDR)
+				if	(word_address >= AES132_IO_ADDR) {
 					// Return success and do not read response buffer if we wrote to the I/O buffer
 					// or to the address used to reset the I/O buffer index.
+					Serial.println("--Communication succeeeded--");
 					return aes132_lib_return;
+				}
 
 				// Read response buffer when writing to device memory to check for write success.
 				aes132c_wait_for_response_ready();
@@ -503,6 +504,8 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 	uint8_t crc_index;
 	uint8_t count_byte;
 
+	Serial.println("Entered recv response");
+
 	do {
 		aes132_lib_return = aes132c_wait_for_response_ready();
 		if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
@@ -588,6 +591,7 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
  */
 uint8_t aes132c_send_and_receive(uint8_t *command, uint8_t size, uint8_t *response, uint8_t options)
 {
+	Serial.println("Entered send n recv");
 	uint8_t aes132_lib_return = aes132c_send_command(command, options);
 	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
 		Serial.println("Error sending command, in aes132c_send_and_receive()");

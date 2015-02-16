@@ -22,6 +22,7 @@
 #include "Arduino.h"
 #include <Wire.h>
 #include "aes132_i2c.h"                //!< I2C library definitions
+#include "aes132_commands.h"
 
 /** \brief I2C address used at AES132 library startup. */
 #define AES132_I2C_DEFAULT_ADDRESS   ((uint8_t) 0x50)
@@ -59,11 +60,41 @@ uint8_t deviceAddress() {
 void chip_wakeup()
 {
 	Serial.println("chip_wakeup()");
+
+	uint8_t data = 0x00;
+	Wire.beginTransmission(0x50);
+	uint8_t statr[2] = {0xFF, 0xF0};
 	// This was the only way short of manually adjusting the SDA pin to wake up the device
+	//Wire.write(statr, (uint8_t)2);
+	Wire.write(statr[0]);
+	Wire.write(statr[1]);
+  	int retu = Wire.endTransmission();
+  	Serial.print("End transmission return = ");
+  	Serial.println(retu);
+	Wire.requestFrom(0x50, 1);
+	if (Wire.available())
+		data = Wire.read();
+	Serial.println(data, BIN);
+
+
+
+/*	uint8_t rxBuffer = 0;
+	uint16_t statusRegister = 0xFFF0;
+
+	//aes132c_read_memory(1, statusRegister, &rxBuffer);
+
+	uint8_t statr[1] = {0x50};
 	Wire.beginTransmission(deviceAddress());
-  	int status = Wire.endTransmission();
-  	Serial.println("Sent begin and end - return = ");
-  	Serial.print(status);
+	Wire.write(statr, (uint8_t)1);
+	Wire.endTransmission();*/
+
+//	uint8_t statr[2] = {0xFF, 0xF0};
+	// This was the only way short of manually adjusting the SDA pin to wake up the device
+//	Wire.beginTransmission(deviceAddress());
+//	Wire.write(statr, (uint8_t)2);
+  //	int retu = Wire.endTransmission();
+  //	Serial.print("End transmission return = ");
+  	//Serial.println(retu);
 }
 
 
@@ -101,7 +132,6 @@ uint8_t i2c_send_stop(void)
  	return I2C_FUNCTION_RETCODE_COMM_FAIL;
 }
 
-
 /** \brief This function sends bytes to an I2C device.
  * \param[in] count number of bytes to send
  * \param[in] data pointer to tx buffer
@@ -109,9 +139,15 @@ uint8_t i2c_send_stop(void)
  */
 uint8_t i2c_send_bytes(uint8_t count, uint8_t *data)
 {
+	Serial.println("Sending bytes: ");
+	for (int i = 0; i < count; i++) {
+		Serial.println(data[i], HEX);
+	}
+
 	int sent_bytes = Wire.write(data, count);
 
 	if (count > 0 && sent_bytes == count) {
+		Serial.println("Successfully sent all bytes.");
 		return I2C_FUNCTION_RETCODE_SUCCESS;
 	}
 
@@ -134,12 +170,17 @@ uint8_t i2c_receive_bytes(uint8_t count, uint8_t *data)
 		return I2C_FUNCTION_RETCODE_COMM_FAIL;
 	}
 
+	Serial.println("Bytes receiving:");
+	Serial.println(count);
 	for (i = 0; i < count; i++) {
 		while (!Wire.available()); // Wait for byte that is going to be read next
-		*data++ = Wire.read(); // Store read value
+		char c = Wire.read();
+		Serial.println("Read character:");
+		Serial.println((int)c, BIN);
+		*data++ = c; // Store read value
 	}
 
-	return i2c_send_stop();
+	return I2C_FUNCTION_RETCODE_SUCCESS;
 }
 
  /** \brief This function creates a Start condition and sends the I2C address.
@@ -149,12 +190,14 @@ uint8_t i2c_receive_bytes(uint8_t count, uint8_t *data)
 uint8_t aes132p_send_slave_address(uint8_t read)
 {
 	uint8_t sla = i2c_address_current | read;
-	uint8_t aes132_lib_return;
+	uint8_t aes132_lib_return = 0;
 	Wire.beginTransmission(deviceAddress());
 
 	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
 		return aes132_lib_return;
 
+	Serial.println("Sending slave address:");
+	Serial.println(sla, HEX);
 	aes132_lib_return = i2c_send_bytes(1, &sla);
 	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
 		i2c_send_stop();
@@ -203,31 +246,35 @@ uint8_t aes132p_write_memory_physical(uint8_t count, uint16_t word_address, uint
 
 	// In both, big-endian and little-endian systems, we send MSB first.
 	const uint8_t word_address_buffer[] = {(uint8_t) (word_address >> 8), (uint8_t) (word_address & 0xFF)};
-	uint8_t aes132_lib_return = aes132p_send_slave_address(I2C_WRITE);
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
+//	uint8_t aes132_lib_return = aes132p_send_slave_address(I2C_WRITE);
+//	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
 		// There is no need to create a Stop condition, since function
 		// aes132p_send_slave_address does that already in case of error.
-		return aes132_lib_return;
+//		return aes132_lib_return;
 
-	aes132_lib_return = i2c_send_bytes(sizeof(word_address), (uint8_t *) word_address_buffer);
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
+	Wire.beginTransmission(0x50);
+
+	i2c_send_bytes(sizeof(word_address), (uint8_t *) word_address_buffer);
+	//if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
 		// Don't override the return code from i2c_send_bytes in case of error.
-		i2c_send_stop();
-		Serial.println("Writing memory failed");
-		return aes132_lib_return;
-	}
+	//	i2c_send_stop();
+	//	Serial.println("Writing memory failed");
+	//	return aes132_lib_return;
+	//}
 
-	if (count > 0)
+	//if (count > 0)
 		// A count of zero covers the case when resetting the I/O buffer address.
 		// This case does only require a write access to the device,
 		// but data don't have to be actually written.
-		aes132_lib_return = i2c_send_bytes(count, data);
+	i2c_send_bytes(count, data);
 
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
-		// Don't override the return code from i2c_send_bytes in case of error.
-		i2c_send_stop();
-		return aes132_lib_return;
-	}
+	//if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
+	//	// Don't override the return code from i2c_send_bytes in case of error.
+	//	i2c_send_stop();
+	//	return aes132_lib_return;
+	//}
+
+	delay(10);
 
 	// success
 	return i2c_send_stop();
@@ -251,22 +298,25 @@ uint8_t aes132p_read_memory_physical(uint8_t size, uint16_t word_address, uint8_
 	// In both, big-endian and little-endian systems, we send MSB first.
 	const uint8_t word_address_buffer[] = {(uint8_t) (word_address >> 8), (uint8_t) (word_address & 0xFF)};
 
-	uint8_t aes132_lib_return = aes132p_send_slave_address(I2C_WRITE);
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
-		return aes132_lib_return;
+	//uint8_t aes132_lib_return = aes132p_send_slave_address(I2C_WRITE);
+	//if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
+	//	return aes132_lib_return;
 
 	//Send the word address
-	aes132_lib_return = i2c_send_bytes(sizeof(word_address), (uint8_t *)word_address_buffer);
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
-		i2c_send_stop();
-		Serial.println("Read memory failed");
-		return aes132_lib_return;
-	}
+	Wire.beginTransmission(0x50);
+	i2c_send_bytes(sizeof(word_address), (uint8_t *)word_address_buffer);
+//	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
+//		i2c_send_stop();
+//		Serial.println("Read memory failed");
+//		return aes132_lib_return;
+//	}
+	Wire.endTransmission();
+	delay(10);
 
 	// Start reading over I2C
-	aes132_lib_return = aes132p_send_slave_address(I2C_READ);
-	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
-		return aes132_lib_return;
+	//aes132_lib_return = aes132p_send_slave_address(I2C_READ);
+	//if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
+	//	return aes132_lib_return;
 
 	// Actually listen for the bytes
 	return i2c_receive_bytes(size, data);
@@ -284,6 +334,7 @@ uint8_t aes132p_resync_physical(void)
 	uint8_t nine_clocks = 0xFF;
 	Wire.beginTransmission(deviceAddress());
 	i2c_send_bytes(1, &nine_clocks);
+	Wire.beginTransmission(deviceAddress());
 	uint8_t ret_code = Wire.endTransmission();
 
 	if (ret_code == AES132_FUNCTION_RETCODE_SUCCESS) {
