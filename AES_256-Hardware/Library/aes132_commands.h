@@ -88,9 +88,11 @@
 uint8_t aes132m_block_read(uint16_t word_address, uint8_t n_bytes, uint8_t *result);
 uint8_t aes132m_info(uint8_t selector, uint8_t *result);
 uint8_t aes132m_temp_sense(uint16_t *temp_diff);
-uint8_t aes132m_random(uint8_t *result);
+uint8_t random(uint8_t *result);
 uint8_t writeKey(uint8_t *key, uint16_t keyID);
 uint8_t encrypt(uint8_t *result);
 uint8_t nonce(uint8_t *result);
+uint8_t decrypt(uint8_t *inMac, uint8_t *dataToDecrypt, uint8_t *result);
+void PrintHex8(uint8_t *data, uint8_t length);
 
 #endif
