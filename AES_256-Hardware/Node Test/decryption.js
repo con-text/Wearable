@@ -15,6 +15,16 @@ Page 114
 var ciphertext = "D5021639560E2829F2970F06187852DF";
 var encInputMAC = "FEC17B9E6C91B9FC4A4F7D3A0390934C";
 
+console.log("");
+console.log("----DECRYPTION----")
+console.log("");
+console.log("CIPHERTEXT:");
+printForArduino(ciphertext)
+console.log("")
+console.log("Input MAC:");
+printForArduino(encInputMAC)
+console.log("")
+
 // Construct A0 and calculate A'0
 var A0 = new Buffer("01000000000000000000000000010000", 'hex');
 var cipher = crypto.createCipheriv(encMode,keyBuf, ivBuf);
@@ -60,10 +70,10 @@ var Bp2 = cipher.update(B2,'hex','hex');
 Bp2 += cipher.final('hex');
 console.log("Bp2 = " + Bp2.toUpperCase());
 
-if (Bp2 === MACT) console.log("SUCCESS!");
-else console.log("Failed.");
-
-printForArduino("FEC17B9E6C91B9FC4A4F7D3A0390934C")
+console.log("");
+if (Bp2 === MACT) console.log("Mac Auth Success!");
+else console.log("Mac Auth Failed.");
+console.log("");
 
 function printForArduino(string) {
 	var newString = "";
