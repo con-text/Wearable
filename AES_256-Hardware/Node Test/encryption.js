@@ -39,8 +39,21 @@ macflag = 0x00
 0x0000000000
 */
 
+// 06 = Enc
+// 07 = Dec
+var opcode = "06";
+
+// 00 = Output from ATAES132
+// 02 = Input to ATAES132
+var macFlag = "00";
+
+var mode = "00"
+var param1 = "0001"
+var param2 = "0010"
+
 // Construct B1 and calculate B'1
-var B1 = xor(new Buffer(Bp0, 'hex'), new Buffer("000E00EE060000010010000000000000", 'hex')).toString('hex');
+var B1 = xor(new Buffer(Bp0, 'hex'), new Buffer("000E00EE" + opcode + mode + param1 + param2 + macFlag + "0000000000", 'hex')).toString('hex');
+
 var cipher = crypto.createCipheriv(encMode,keyBuf, ivBuf);
 cipher.setAutoPadding(false);
 var Bp1 = cipher.update(B1,'hex','hex');
