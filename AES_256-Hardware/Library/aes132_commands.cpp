@@ -63,7 +63,6 @@ uint8_t aes132m_temp_sense(uint16_t *temp_diff)
 	const uint8_t command[] = {AES132_COMMAND_SIZE_MIN, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD9, 0x9C};
 	uint8_t response[AES132_RESPONSE_SIZE_TEMP_SENSE];
 
-	Serial.println("Entered temp sense");
 	uint8_t aes132_lib_return = aes132c_send_and_receive((uint8_t *) command,
 				AES132_RESPONSE_SIZE_TEMP_SENSE, response, AES132_OPTION_NO_APPEND_CRC);
 	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
@@ -95,14 +94,9 @@ uint8_t aes132m_block_read(uint16_t word_address, uint8_t n_bytes, uint8_t *resu
 }
 
 
-/** This function sends a BlockRead command and receives the read data.
- *
- * @param[in] word_address start address to read from
- * @param[in] n_bytes number of bytes to read
- * @param[out] result pointer to read buffer
- * @return status of the operation
+/** This generates a random number
  */
-uint8_t aes132m_random(uint8_t *result)
+uint8_t randomNumber(uint8_t *result)
 {
 	byte mode = B00000010;
 	uint8_t command[AES132_COMMAND_SIZE_MIN] = {AES132_COMMAND_SIZE_MIN, AES132_OPCODE_RANDOM, mode, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -110,13 +104,7 @@ uint8_t aes132m_random(uint8_t *result)
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN + 16, result, AES132_OPTION_DEFAULT);
 }
 
-/** This function sends a BlockRead command and receives the read data.
- *
- * @param[in] word_address start address to read from
- * @param[in] n_bytes number of bytes to read
- * @param[out] result pointer to read buffer
- * @return status of the operation
- */
+/** This writes a key to the right area in memory */
 uint8_t writeKey(uint8_t *key, uint16_t keyID)
 {
 	uint16_t address = 0xF210;
@@ -135,18 +123,59 @@ uint8_t writeKey(uint8_t *key, uint16_t keyID)
 
 uint8_t encrypt(uint8_t *result)
 {
-	byte mode = B11100000;
+	byte mode = B00000000;
 
-	uint8_t command[AES132_COMMAND_SIZE_MIN+16] = {AES132_COMMAND_SIZE_MIN+16, AES132_OPCODE_ENCRYPT, mode, 0x00, 0x01, 0x00, 0x00, 
+	uint8_t command[AES132_COMMAND_SIZE_MIN+16] = {AES132_COMMAND_SIZE_MIN+16, AES132_OPCODE_ENCRYPT, mode, 0x00, 0x00, 0x00, 0x00, 
 													0x68, 0x65, 0x79, 0x79, 
 													0x79, 0x79, 0x79, 0x79,
 													0x79, 0x79, 0x79, 0x79,
 													0x79, 0x79, 0x79, 0x79,
 													0x00, 0x00};
 
+	// Set the key to use
+	command[AES132_COMMAND_INDEX_PARAM1_LSB] = 0x01;
+	// Set the size of the data packet to be decrypted
 	command[AES132_COMMAND_INDEX_PARAM2_LSB] = 0x10;
 
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN + 32, result, AES132_OPTION_DEFAULT);
+}
+
+uint8_t decrypt(uint8_t *inMac, uint8_t *dataToDecrypt, uint8_t *result)
+{
+	byte mode = B00000000;
+
+	// 16 bytes for the inMac, 16 bytes for the input data
+	uint8_t command[AES132_COMMAND_SIZE_MIN+32] = {AES132_COMMAND_SIZE_MIN+32, AES132_OPCODE_DECRYPT, mode, 0x00, 0x00, 0x00, 0x00, 
+													//inMac
+													0x00, 0x00, 0x00, 0x00, 
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													// data
+													0x00, 0x00, 0x00, 0x00, 
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													// Checksums
+													0x00, 0x00};
+
+	// Set the key to use
+	command[AES132_COMMAND_INDEX_PARAM1_LSB] = 0x01;
+	// Set the size of the data packet to be return
+	command[AES132_COMMAND_INDEX_PARAM2_LSB] = 0x10;
+
+	// Copy inMac into the right place
+	memcpy(&command[7], inMac, 16*sizeof(uint8_t));
+
+	// Copy data into the right place
+	memcpy(&command[23], dataToDecrypt, 16*sizeof(uint8_t));
+
+	PrintHex8(inMac, 16);
+	PrintHex8(dataToDecrypt, 16);
+	PrintHex8(command, AES132_COMMAND_SIZE_MIN+32);
+
+	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN+16, result, AES132_OPTION_DEFAULT);
+
 }
 
 uint8_t nonce(uint8_t *result) 
@@ -160,4 +189,15 @@ uint8_t nonce(uint8_t *result)
 													0x00, 0x00};
 
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN, result, AES132_OPTION_DEFAULT);
+}
+
+void PrintHex8(uint8_t *data, uint8_t length) // prints 8-bit data in hex with leading zeroes
+{
+       Serial.print("0x"); 
+       for (int i=0; i<length; i++) { 
+         if (data[i]<0x10) {Serial.print("0");} 
+         Serial.print(data[i],HEX); 
+         Serial.print(" "); 
+       }
+       Serial.println("");
 }
