@@ -13,6 +13,8 @@ void setup() {
 
   Wire.begin();
   
+  
+  /* UNCOMMENT FOR DECRYPTION */
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer2);
   
@@ -21,12 +23,12 @@ void setup() {
   }
   
   uint8_t dataToDecrypt[] = {
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+    0xD5, 0x02, 0x16, 0x39, 0x56, 0x0E, 0x28, 0x29,
+    0xF2, 0x97, 0x0F, 0x06, 0x18, 0x78, 0x52, 0xDF };
     
-   uint8_t inMac[] = {
-    0xAA, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB,
-    0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB };
+  uint8_t inMac[] = {
+    0xFE, 0xC1, 0x7B, 0x9E, 0x6C, 0x91, 0xB9, 0xFC, 
+    0x4A, 0x4F, 0x7D, 0x3A, 0x03, 0x90, 0x93, 0x4C };
     
   uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN+16] = {0};
   decrypt(dataToDecrypt, inMac, rxBuffer);
@@ -34,9 +36,10 @@ void setup() {
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
   }
-  
+   
       
- /* uint8_t keyOne[] = {
+ /* UNCOMMENT FOR WRITING KEYS 
+   uint8_t keyOne[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
     
@@ -47,14 +50,16 @@ void setup() {
  // uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN + 16] = {0};
   //aes132m_block_read(address, 16, rxBuffer);
   
-  /*
+  /* Uncomment for generating nonce 
   uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer);
   delay(100);
   
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
-  }
+  } */
+  
+  /* Uncomment for encryption
   
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN + 32] = {0};
   encrypt(rxBuffer2);
