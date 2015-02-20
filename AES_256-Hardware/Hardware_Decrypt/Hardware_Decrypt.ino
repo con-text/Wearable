@@ -2,6 +2,7 @@
 #include <aes132.h>
 //#include <aes132_i2c.h>
 #include <aes132_commands.h>
+#define AES_LIBRARY_DEBUG 0
 
 byte val = 0;
 
@@ -14,6 +15,8 @@ void setup() {
   Wire.begin();
   
   String randomString = generate128BitRandom();
+  
+  Serial.println(randomString);
   
   /* UNCOMMENT FOR DECRYPTION */
 /*  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};

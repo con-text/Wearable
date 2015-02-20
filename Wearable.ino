@@ -71,6 +71,8 @@ void setup()
 {
   // Setup serial
   Serial.begin(9600);
+  
+  Wire.begin();
 
   // Test the AES
   // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
@@ -347,11 +349,14 @@ String decryptMessage(int key, uint8_t dataToDecrypt[16], uint8_t inMac[16])
   
   // Send the decrypt
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN+16] = {0};
-  decrypt(inMac, dataToDecrypt, rxBuffer);
+  decrypt(inMac, dataToDecrypt, rxBuffer2);
+    
+  PrintHex8(F("GOt decrypted message"), rxBuffer2, sizeof(rxBuffer2));
   
-  if (rxBuffer[1] != 0x00) {
+  if (rxBuffer2[1] != 0x00) {
     return "ERROR";
   }
+  
   
   // Remove the packet size and checksums
   cleanupData(rxBuffer2, sizeof(rxBuffer2));
