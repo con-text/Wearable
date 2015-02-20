@@ -170,10 +170,6 @@ uint8_t decrypt(uint8_t *inMac, uint8_t *dataToDecrypt, uint8_t *result)
 	// Copy data into the right place
 	memcpy(&command[23], dataToDecrypt, 16*sizeof(uint8_t));
 
-	PrintHex8(inMac, 16);
-	PrintHex8(dataToDecrypt, 16);
-	PrintHex8(command, AES132_COMMAND_SIZE_MIN+32);
-
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN+16, result, AES132_OPTION_DEFAULT);
 
 }
@@ -189,15 +185,4 @@ uint8_t nonce(uint8_t *result)
 													0x00, 0x00};
 
 	return aes132c_send_and_receive(command, AES132_RESPONSE_SIZE_MIN, result, AES132_OPTION_DEFAULT);
-}
-
-void PrintHex8(uint8_t *data, uint8_t length) // prints 8-bit data in hex with leading zeroes
-{
-       Serial.print("0x"); 
-       for (int i=0; i<length; i++) { 
-         if (data[i]<0x10) {Serial.print("0");} 
-         Serial.print(data[i],HEX); 
-         Serial.print(" "); 
-       }
-       Serial.println("");
 }

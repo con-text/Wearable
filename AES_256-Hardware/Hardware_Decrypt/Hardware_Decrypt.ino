@@ -13,9 +13,10 @@ void setup() {
 
   Wire.begin();
   
+  String randomString = generate128BitRandom();
   
   /* UNCOMMENT FOR DECRYPTION */
-  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};
+/*  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer2);
   
   for (int i = 0; i < sizeof(rxBuffer2); i++) {
@@ -27,7 +28,7 @@ void setup() {
     0xF2, 0x97, 0x0F, 0x06, 0x18, 0x78, 0x52, 0xDF };
     
     
-  uint8_t inMac[] = {
+  uint8_t inMac[] = {  
     0x27, 0x39, 0x6A, 0xBC, 0xC2, 0xFD, 0x88, 0x2C, 
     0x15, 0xC7, 0xE5, 0x0D, 0x0B, 0x62, 0x6E, 0x24 };
     
@@ -36,7 +37,7 @@ void setup() {
     
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
-  }
+  }*/
    
       
  /* UNCOMMENT FOR WRITING KEYS 
@@ -85,31 +86,64 @@ void loop() {
 
 }
 
-byte calculateTemperature()
+String generate128BitRandom()
 {
-  uint16_t response[1] = {0};
+  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN+16] = {0};
+  randomNumber(rxBuffer);
   
-  uint8_t ret_code = aes132m_temp_sense(response);
-  Serial.println("Response bytes:");
-  for (int i = 0; i < sizeof(response); i++) {
-    Serial.println(response[i], HEX);
-  }
-  Serial.println();
-
-  return ret_code;  
+  if (rxBuffer[1] != 0x00) {
+    return "ERROR";
+  } 
+  
+  // Remove the packet size and checksums
+  cleanupData(rxBuffer, sizeof(rxBuffer));
+    
+  String randomString = stringFromUInt8(rxBuffer, sizeof(rxBuffer));
+  
+  return randomString;
 }
 
-byte getInfo()
+void cleanupData(uint8_t *data, int dataLength)
 {
-  uint8_t response[2] = {0,0};
-  
-  uint8_t ret_code = aes132m_info(0x06, response);
-  Serial.println("Response bytes:");
-  for (int i = 0; i < sizeof(response); i++) {
-    Serial.println(response[i], HEX);
-  }
-  Serial.println();
-
-  return ret_code;  
+  data[0] = NULL;
+  data[dataLength-1] = NULL;
+  data[dataLength-2] = NULL; 
 }
 
+/* Utility functions */
+
+String stringFromUInt8(uint8_t* data, int dataLength)
+{
+  String hexMessage = "";
+  String newString;
+    
+  for (int i = 0; i < dataLength; i++) {
+    if (data[i] == NULL) {
+      continue;
+    }
+    newString = "";
+    // Special case for 0
+    if (data[i] < 0x10)
+      newString += "0";
+    newString += String(char(data[i]), HEX);
+    hexMessage += newString;
+  }
+
+  hexMessage.toUpperCase();
+
+  return hexMessage;
+}
+
+void PrintHex8(String message, uint8_t *data, uint8_t length) // prints 8-bit data in hex with leading zeroes
+{
+  Serial.println(message);
+  Serial.print("0x"); 
+  for (int i=0; i<length; i++) { 
+    if (data[i]<0x10) {
+      Serial.print("0");
+    } 
+    Serial.print(data[i],HEX); 
+    Serial.print(" "); 
+  }
+  Serial.println("");
+}

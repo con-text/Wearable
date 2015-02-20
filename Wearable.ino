@@ -2,17 +2,20 @@
   Context Project BLE Login Device
 */
 
-#define DUMP(str, i, buf, sz) { Serial.println(str); \
-    for(i=0; i<(sz); ++i) { if(buf[i]<0x10) Serial.print('0'); Serial.print(char(buf[i]), HEX); } \
-    Serial.println(); } //Help function for printing the Output
-
-#define DEBUG_ENABLED
-
-// Libraries
+// Wire library
+#include <Wire.h>
+// RFDuino Library
 #include <RFduinoBLE.h>
+// AES Software
 #include <aes256.h>
+// AES Hardware
+#include <aes132.h>
+#include <aes132_commands.h>
+// Sizes of types
 #include <limits.h>
+// FSM Library
 #include <FiniteStateMachine.h>
+// Timing library
 #include <elapsedMillis.h>
 
 // Disconnect automatically after 5s
@@ -21,7 +24,6 @@ elapsedMillis interruptTimer;
 
 // Variables
 String inputString = "";
-int i;
 
 String sentRandom;
 String serverRandom;
@@ -91,15 +93,18 @@ void didConnect()
 {
   Serial.println(F("---In connected state---"));
 
-  uint8_t hexString[16];
-  generate256BitRandom(hexString);
+  String randomString = generate128BitRandom();
+  
+  if (randomString != "ERROR")
+  {
+    Serial.println("Error generating random number, resetting");
+    stateMachine.transitionTo(Advertising);
+  }
 
-  String hexMessage = stringFromUInt8(hexString);
-
-  sentRandom = hexMessage;
+  sentRandom = randomString;
   Serial.println(F("Sending Random Number"));
-  Serial.println(hexMessage);
-  sendMessage(hexMessage);
+  Serial.println(randomString);
+  sendMessage(randomString);
   stateMachine.transitionTo(WaitingForCipher);
 }
 
@@ -119,7 +124,7 @@ void waitingCipher()
     decryptMessage(0, hexString);
 
     // Convert the uint8 back to a string
-    String decryptedString = stringFromUInt8(hexString);
+    String decryptedString = stringFromUInt8(hexString, 16);
     Serial.println(decryptedString);
 
     if (decryptedString == sentRandom) {
@@ -151,7 +156,7 @@ void waitingRandom()
     encryptMessage(0, hexString);
 
     // Convert the uint8 back to a string
-    String encryptedString = stringFromUInt8(hexString);
+    String encryptedString = stringFromUInt8(hexString, 16);
 
     sendMessage(encryptedString);
     Serial.println("Sending encrypted string");
@@ -280,10 +285,10 @@ void encryptMessage(int key, uint8_t data[16])
   }
 
   // Do the actual encryption
-  DUMP(F("Unencrypted data: "), i, data, sizeof(data) * 4);
+  PrintHex8(F("Unencrypted data: "), data, sizeof(data) * 4);
   Serial.println(F("---Encrypting---"));
   aes256_encrypt_ecb(&ctxt, data);
-  DUMP(F("Encrypted data: "), i, data, sizeof(data) * 4);
+  PrintHex8(F("Encrypted data: "), data, sizeof(data) * 4);
   
   // Clean up
   aes256_done(&ctxt);
@@ -301,39 +306,53 @@ void decryptMessage(int key, uint8_t data[16])
   }
 
   // Do the actual encryption
-  DUMP(F("Encrypted data: "), i, data, sizeof(data) * 4);
+  PrintHex8(F("Encrypted data: "), data, sizeof(data) * 4);
   Serial.println(F("---Decrypting---"));
   aes256_decrypt_ecb(&ctxt, data);
-  DUMP(F("Unencrypted data: "), i, data, sizeof(data) * 4);
+  PrintHex8(F("Unencrypted data: "), data, sizeof(data) * 4);
 
   // Clean up
   aes256_done(&ctxt);
 }
 
-/* Utilities */
+/* AES Hardware functions */
 
-void generate256BitRandom(uint8_t* data)
+String generate128BitRandom()
 {
-  unsigned long randomValue = micros();
-  randomSeed(randomValue);
-
-  long r = random(LONG_MAX);
-  long r1 = random(LONG_MAX);
-  long r2 = random(LONG_MAX);
-  long r3 = random(LONG_MAX);
-
-  memcpy(data, &r, sizeof(long));
-  memcpy(data + 4, &r1, sizeof(long));
-  memcpy(data + 8, &r2, sizeof(long));
-  memcpy(data + 12, &r3, sizeof(long));
+  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN+16] = {0};
+  randomNumber(rxBuffer);
+  
+  if (rxBuffer[1] != 0x00) {
+    return "ERROR";
+  } 
+  
+  // Remove the packet size and checksums
+  cleanupData(rxBuffer, sizeof(rxBuffer));
+  
+  // Turn the data array into a string
+  String randomString = stringFromUInt8(rxBuffer, sizeof(rxBuffer));
+  
+  return randomString;
 }
 
-String stringFromUInt8(uint8_t* data)
+/* Utilities */
+
+void cleanupData(uint8_t *data, int dataLength)
+{
+  data[0] = NULL;
+  data[dataLength-1] = NULL;
+  data[dataLength-2] = NULL; 
+}
+
+String stringFromUInt8(uint8_t* data, int dataLength)
 {
   String hexMessage = "";
   String newString;
-
-  for (int i = 0; i < sizeof(data) * 4; i++) {
+    
+  for (int i = 0; i < dataLength; i++) {
+    if (data[i] == NULL) {
+      continue;
+    }
     newString = "";
     // Special case for 0
     if (data[i] < 0x10)
@@ -355,4 +374,18 @@ void uint8FromString(String message, uint8_t* data)
     internalString.toCharArray(buf, 2 + 1);
     data[i / 2] = strtol(buf, NULL, 16);
   }
+}
+
+void PrintHex8(const __FlashStringHelper* message, uint8_t *data, uint8_t length) // prints 8-bit data in hex with leading zeroes
+{
+  Serial.println(message);
+  Serial.print("0x"); 
+  for (int i=0; i<length; i++) { 
+    if (data[i]<0x10) {
+      Serial.print("0");
+    } 
+    Serial.print(data[i],HEX); 
+    Serial.print(" "); 
+  }
+  Serial.println("");
 }
