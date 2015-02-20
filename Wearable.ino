@@ -5,7 +5,7 @@
 
 // Defines whether to use the AES crypto chip
 #define AES_HARDWARE 1
-#define AES_LIBRARY_DEBUG 1
+#define AES_LIBRARY_DEBUG 0
 #define interval 5000
 
 // Wire library
@@ -350,13 +350,10 @@ String decryptMessage(int key, uint8_t dataToDecrypt[16], uint8_t inMac[16])
   // Send the decrypt
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN+16] = {0};
   decrypt(inMac, dataToDecrypt, rxBuffer2);
-    
-  PrintHex8(F("GOt decrypted message"), rxBuffer2, sizeof(rxBuffer2));
-  
+      
   if (rxBuffer2[1] != 0x00) {
     return "ERROR";
   }
-  
   
   // Remove the packet size and checksums
   cleanupData(rxBuffer2, sizeof(rxBuffer2));
