@@ -2,7 +2,6 @@
   Context Project BLE Login Device
 */
 
-
 // Defines whether to use the AES crypto chip
 #define AES_LIBRARY_DEBUG 0
 #define interval 5000
@@ -89,7 +88,7 @@ void advertising()
 void didConnect()
 {
   Serial.println(F("---In connected state---"));
-
+ 
   String randomString = generate128BitRandom();
 
   if (randomString == "ERROR")
@@ -102,7 +101,9 @@ void didConnect()
   Serial.println(F("Sending Random Number"));
   Serial.println(randomString);
   sendMessage(randomString);
-  stateMachine.transitionTo(WaitingForCipher);
+  stateMachine.immediateTransitionTo(WaitingForCipher);
+  
+  vibrate();
 }
 
 void resetTimer()
@@ -370,7 +371,6 @@ void vibrate()
   digitalWrite(vibrationPin, HIGH);
   delay(250);
   digitalWrite(vibrationPin, LOW);
-  delay(5000); 
 }
 
 /* Utilities */
