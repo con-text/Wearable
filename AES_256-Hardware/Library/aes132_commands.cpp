@@ -121,17 +121,21 @@ uint8_t writeKey(uint8_t *key, uint16_t keyID)
 	aes132c_write_memory(sizeof(keyConfig), address, (uint8_t*)&keyConfig);
 }
 
-uint8_t encrypt(uint8_t *result)
+uint8_t encrypt(uint8_t dataToEncrypt[16], uint8_t *result)
 {
 	byte mode = B00000000;
 
 	uint8_t command[AES132_COMMAND_SIZE_MIN+16] = {AES132_COMMAND_SIZE_MIN+16, AES132_OPCODE_ENCRYPT, mode, 0x00, 0x00, 0x00, 0x00, 
-													0x68, 0x65, 0x79, 0x79, 
-													0x79, 0x79, 0x79, 0x79,
-													0x79, 0x79, 0x79, 0x79,
-													0x79, 0x79, 0x79, 0x79,
+													//data
+													0x00, 0x00, 0x00, 0x00, 
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													0x00, 0x00, 0x00, 0x00,
+													// checksums
 													0x00, 0x00};
 
+	// Copy the data into the right place
+	memcpy(&command[7], dataToEncrypt, 16*sizeof(uint8_t));
 	// Set the key to use
 	command[AES132_COMMAND_INDEX_PARAM1_LSB] = 0x01;
 	// Set the size of the data packet to be decrypted

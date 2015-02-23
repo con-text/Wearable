@@ -191,41 +191,55 @@ uint8_t aes132c_wait_for_status_register_bit(uint8_t mask, uint8_t is_set, uint1
 	int i = 0;
 
 	do {
-		Serial.print("---Loop ");
-		Serial.println(i);
+		#if AES_LIBRARY_DEBUG
+			Serial.print("---Loop ");
+			Serial.println(i);
+		#endif
 		i++;
 
 		aes132_lib_return = aes132p_read_memory_physical(1, AES132_STATUS_ADDR, &device_status_register);
 		if (aes132_lib_return == AES132_FUNCTION_RETCODE_ADDRESS_WRITE_NACK) {
 			// The device is busy. Continue polling until "n_retries" is depleted.
-			Serial.println("Device is busy");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Device is busy");
+			#endif
 			continue;
 		}
 
 		if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
 			// Communication error other than a I2C device being busy occurred. Return error.
-			Serial.println("Device error");
+			#if AES_LIBRARY_DEBUG	
+				Serial.println("Device error");
+			#endif
 			return aes132_lib_return;
 		}
 
 		if (is_set == AES132_BIT_SET) {
 			// Wait for the mask bit(s) being set.
 			if ((device_status_register & mask) == mask) {
-				Serial.println("Response is ready");
+				#if AES_LIBRARY_DEBUG
+					Serial.println("Response is ready");
+				#endif
 				// Mask pattern has been found in device status register. Return success.
 				return aes132_lib_return;
 			} else {
-				Serial.println("Wait for response ready bit");
+				#if AES_LIBRARY_DEBUG
+					Serial.println("Wait for response ready bit");
+				#endif
 			}
 
 		} else {
 			// Wait for the mask bit(s) being cleared.
 			if ((device_status_register & mask) == 0) {
-				Serial.println("Device booted up");
+				#if AES_LIBRARY_DEBUG
+					Serial.println("Device booted up");
+				#endif
 				// Mask pattern has been found in device status register. Return success.
 				return aes132_lib_return;
 			} else {
-				Serial.println("Waiting for device to boot up");
+				#if AES_LIBRARY_DEBUG
+					Serial.println("Waiting for device to boot up");
+				#endif
 			}
 		}
 
@@ -339,7 +353,9 @@ uint8_t aes132c_access_memory(uint8_t count, uint16_t word_address, uint8_t *dat
 		n_retries_memory_access = AES132_RETRY_COUNT_ERROR;
 
 		do {
-			Serial.println("Calling aes132c_wait_for_device_ready");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Calling aes132c_wait_for_device_ready");
+			#endif
 			aes132_lib_return = aes132c_wait_for_device_ready();
 			if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
 				// We lost communication. Re-synchronize.
@@ -347,7 +363,9 @@ uint8_t aes132c_access_memory(uint8_t count, uint16_t word_address, uint8_t *dat
 
 			if (read == AES132_WRITE) {
 				// Write to the device.
-				Serial.println("Calling aes132p_write_memory_physical");
+				#if AES_LIBRARY_DEBUG
+					Serial.println("Calling aes132p_write_memory_physical");
+				#endif
 				aes132_lib_return = aes132p_write_memory_physical(count, word_address, data);
 				if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
 					// Communication failed. Retry.
@@ -357,7 +375,9 @@ uint8_t aes132c_access_memory(uint8_t count, uint16_t word_address, uint8_t *dat
 				if	(word_address >= AES132_IO_ADDR) {
 					// Return success and do not read response buffer if we wrote to the I/O buffer
 					// or to the address used to reset the I/O buffer index.
-					Serial.println("--Communication succeeeded--");
+					#if AES_LIBRARY_DEBUG
+						Serial.println("--Communication succeeeded--");
+					#endif
 					return aes132_lib_return;
 				}
 
@@ -374,7 +394,9 @@ uint8_t aes132c_access_memory(uint8_t count, uint16_t word_address, uint8_t *dat
 					return aes132_lib_return;
 			} else {
 				// Read from the device.
-				Serial.println("Calling aes132p_read_memory_physical");
+				#if AES_LIBRARY_DEBUG
+					Serial.println("Calling aes132p_read_memory_physical");
+				#endif
 				aes132_lib_return = aes132p_read_memory_physical(count, word_address, data);
 				if (aes132_lib_return == AES132_FUNCTION_RETCODE_SUCCESS)
 					return aes132_lib_return;
@@ -437,7 +459,9 @@ uint8_t aes132c_read_memory(uint8_t size, uint16_t word_address, uint8_t *data)
  */
 uint8_t aes132c_send_command(uint8_t *command, uint8_t options)
 {
-	Serial.println("Sending command");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Sending command");
+	#endif
 	uint8_t aes132_lib_return;
 	uint8_t n_retries = AES132_RETRY_COUNT_ERROR;
 	uint8_t device_status_register;
@@ -448,10 +472,14 @@ uint8_t aes132c_send_command(uint8_t *command, uint8_t options)
 		aes132c_calculate_crc(count - AES132_CRC_SIZE, command, &command[count - AES132_CRC_SIZE]);
 
 	do {
-		Serial.println("Calling aes132c_write_memory");
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Calling aes132c_write_memory");
+		#endif
 		aes132_lib_return = aes132c_write_memory(count, AES132_IO_ADDR, command);
 		if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS)
-			Serial.println("Writing to I/O buffer failed");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Writing to I/O buffer failed");
+			#endif
 			// Writing to the I/O buffer failed. Retry.
 			continue;
 
@@ -462,7 +490,9 @@ uint8_t aes132c_send_command(uint8_t *command, uint8_t options)
 		// Try to read the device status register. If it fails with an I2C nack of the I2C write address,
 		// we know that the device is busy.
 		// We don't use aes132c_read_device_status_register since this function retries in case of error.
-		Serial.println("Calling aes132p_read_memory_physical");
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Calling aes132p_read_memory_physical");
+		#endif
 		aes132_lib_return = aes132p_read_memory_physical(1, AES132_STATUS_ADDR, &device_status_register);
 		if (aes132_lib_return == AES132_FUNCTION_RETCODE_SUCCESS) {
 			// We were able to read the device status register. Check the CRC bit.
@@ -473,14 +503,18 @@ uint8_t aes132c_send_command(uint8_t *command, uint8_t options)
 		} else if (aes132_lib_return == AES132_FUNCTION_RETCODE_ADDRESS_WRITE_NACK) {
 			// This code block applies to I2C only. Receiving a nack to a I2C address write
 			// indicates that the device is busy executing the command. We therefore return success.
-			Serial.println("Device was busy in aes132c_send_command");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Device was busy in aes132c_send_command");
+			#endif
 			return AES132_FUNCTION_RETCODE_SUCCESS;
 
 		// In case of read-device-status-register failure, we do not send the command again but only
 		// re-synchronize, because we do not want certain commands being repeated, e.g. the Counter command.
 		} else {
 			// Do not override the return value from the call to aes132p_read_memory_physical.
-			Serial.println("Calling resync in aes132c_send_command");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Calling resync in aes132c_send_command");
+			#endif
 			(void) aes132c_resync();
 			return aes132_lib_return;
 		}
@@ -508,7 +542,9 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 	uint8_t crc_index;
 	uint8_t count_byte;
 
-	Serial.println("Entered recv response");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Entered recv response");
+	#endif
 
 	do {
 		aes132_lib_return = aes132c_wait_for_response_ready();
@@ -516,35 +552,45 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 			// Waiting for the Response-Ready bit timed out. We might have lost communication.
 			// Re-synchronize and retry.
 			// Do not override the return value from the call to aes132c_wait_for_response_ready.
-			Serial.println("Waiting for response ready bit timed out, resyncing");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Waiting for response ready bit timed out, resyncing");
+			#endif
 			(void) aes132c_resync();
 			continue;
 		}
-
-		Serial.println("Calling aes132p_read_memory_physical in receive_response");
+		
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Calling aes132p_read_memory_physical in receive_response");
+		#endif
 		// Read count byte from response buffer.
 		aes132_lib_return = aes132p_read_memory_physical(1, AES132_IO_ADDR, &response[AES132_COMMAND_INDEX_COUNT]);
 		if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
 			// Reading the count byte failed. We might have lost communication.
 			// Re-synchronize and retry.
 			// Do not override the return value from the call to aes132p_read_memory_physical.
-			Serial.println("Reading count byte failed, resyncing");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Reading count byte failed, resyncing");
+			#endif
 			(void) aes132c_resync();
 			continue;
 		}
 
 		count_byte = response[AES132_RESPONSE_INDEX_COUNT];
-		Serial.print("---Count byte---");
-		Serial.println(count_byte);
-		Serial.print("---Size---");
-		Serial.println(size);
+		#if AES_LIBRARY_DEBUG
+			Serial.print("---Count byte---");
+			Serial.println(count_byte);
+			Serial.print("---Size---");
+			Serial.println(size);
+		#endif
 		if (count_byte > size) {
 			// The buffer provided by the caller is not big enough to store the entire response,
 			// or the count value got corrupted due to a bad communication channel.
 			// Re-synchronize and retry.
 			aes132_lib_return = AES132_FUNCTION_RETCODE_SIZE_TOO_SMALL;
 			// Do not override aes132_lib_return.
-			Serial.println("The buffer provided isn't large enough");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("The buffer provided isn't large enough");
+			#endif
 			(void) aes132c_resync();
 			continue;
 		}
@@ -553,7 +599,9 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 			// A response has to be between #AES132_RESPONSE_SIZE_MIN and #AES132_RESPONSE_SIZE_MAX bytes long to be valid.
 			// Re-synchronize and retry.
 			aes132_lib_return = AES132_FUNCTION_RETCODE_COUNT_INVALID;
-			Serial.println("The response wasn't in the range");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("The response wasn't in the range");
+			#endif
 			// Do not override aes132_lib_return.
 			(void) aes132c_resync();
 			continue;
@@ -565,7 +613,9 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 			// Reading the remainder of the response failed. We might have lost communication.
 			// Re-synchronize and retry.
 			// Do not override the return value from the call to aes132p_read_memory_physical.
-			Serial.println("Reading the rest of the response failed");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Reading the rest of the response failed");
+			#endif
 			(void) aes132c_resync();
 			continue;
 		}
@@ -575,13 +625,18 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
 		aes132c_calculate_crc(crc_index, response, crc);
 		if ((crc[0] == response[crc_index]) && (crc[1] == response[crc_index + 1])) {
 			// We received a consistent response packet. Return the response return code.
-			Serial.println("Received good response");
+			#if AES_LIBRARY_DEBUG
+				Serial.println("Received good response");
+			#endif
 			return response[AES132_RESPONSE_INDEX_RETURN_CODE];
 		}
 
 		// Received and calculated CRC do not match. Retry reading the response buffer.
 		aes132_lib_return = AES132_FUNCTION_RETCODE_BAD_CRC_RX;
-		Serial.println("Incorrect CRC");
+
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Incorrect CRC");
+		#endif
 
 
 		// Do not override aes132_lib_return.
@@ -604,10 +659,14 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
  */
 uint8_t aes132c_send_and_receive(uint8_t *command, uint8_t size, uint8_t *response, uint8_t options)
 {
-	Serial.println("Entered send n recv");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Entered send n recv");
+	#endif
 	uint8_t aes132_lib_return = aes132c_send_command(command, options);
 	if (aes132_lib_return != AES132_FUNCTION_RETCODE_SUCCESS) {
-		Serial.println("Error sending command, in aes132c_send_and_receive()");
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Error sending command, in aes132c_send_and_receive()");
+		#endif
 		return aes132_lib_return;
 	}
 

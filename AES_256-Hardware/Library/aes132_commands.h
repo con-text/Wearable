@@ -90,7 +90,7 @@ uint8_t aes132m_info(uint8_t selector, uint8_t *result);
 uint8_t aes132m_temp_sense(uint16_t *temp_diff);
 uint8_t randomNumber(uint8_t *result);
 uint8_t writeKey(uint8_t *key, uint16_t keyID);
-uint8_t encrypt(uint8_t *result);
+uint8_t encrypt(uint8_t dataToEncrypt[16], uint8_t *result);
 uint8_t nonce(uint8_t *result);
 uint8_t decrypt(uint8_t *inMac, uint8_t *dataToDecrypt, uint8_t *result);
 

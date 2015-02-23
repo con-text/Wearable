@@ -73,16 +73,22 @@ uint8_t i2c_send_stop(void)
  	delay(10);
 
  	if (status == 0) {
- 		Serial.println("Stop sent succesfully");
+ 		#if AES_LIBRARY_DEBUG
+ 			Serial.println("Stop sent succesfully");
+ 		#endif
  		return I2C_FUNCTION_RETCODE_SUCCESS;
  	} else if (status == 2 || status == 3) {
- 		 Serial.println("NACK when sending stop");
+ 		 #if AES_LIBRARY_DEBUG
+ 		 	Serial.println("NACK when sending stop");
+ 		 #endif
  		return I2C_FUNCTION_RETCODE_NACK;
  	} else if (status == 4) {
  		return I2C_FUNCTION_RETCODE_COMM_FAIL;
  	}
 
- 	Serial.println("Data too long for buffer");
+  	#if AES_LIBRARY_DEBUG
+ 		Serial.println("Data too long for buffer");
+ 	#endif
 
  	return I2C_FUNCTION_RETCODE_COMM_FAIL;
 }
@@ -94,15 +100,21 @@ uint8_t i2c_send_stop(void)
  */
 uint8_t i2c_send_bytes(uint8_t count, uint8_t *data)
 {
-	Serial.println("Sending bytes: ");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Sending bytes: ");
+	#endif
 	for (int i = 0; i < count; i++) {
-		Serial.println(data[i], HEX);
+		 #if AES_LIBRARY_DEBUG
+			Serial.println(data[i], HEX);
+		#endif
 	}
 
 	int sent_bytes = Wire.write(data, count);
 
 	if (count > 0 && sent_bytes == count) {
-		Serial.println("Successfully sent all bytes.");
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Successfully sent all bytes.");
+		#endif
 		return I2C_FUNCTION_RETCODE_SUCCESS;
 	}
 
@@ -126,13 +138,17 @@ uint8_t i2c_receive_bytes(uint8_t count, uint8_t *data)
 		return I2C_FUNCTION_RETCODE_COMM_FAIL;
 	}
 
-	Serial.println("Receiving bytes");
-	Serial.println(count);
+ 	#if AES_LIBRARY_DEBUG
+		Serial.println("Receiving bytes");
+		Serial.println(count);
+	#endif
 	for (i = 0; i < count; i++) {
 		while (!Wire.available()); // Wait for byte that is going to be read next
 		byte c = Wire.read();
-		Serial.println("Read data:");
-		Serial.println((int)c, BIN);
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Read data:");
+			Serial.println((int)c, BIN);
+		#endif
 		*data++ = c; // Store read value
 	}
 
@@ -147,7 +163,9 @@ uint8_t i2c_receive_bytes(uint8_t count, uint8_t *data)
  */
 uint8_t aes132p_write_memory_physical(uint8_t count, uint16_t word_address, uint8_t *data)
 {
-	Serial.println("Calling write memory physical");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Calling write memory physical");
+	#endif
 
 	// Start sending data
 	i2c_send_start();
@@ -178,7 +196,9 @@ uint8_t aes132p_write_memory_physical(uint8_t count, uint16_t word_address, uint
  */
 uint8_t aes132p_read_memory_physical(uint8_t size, uint16_t word_address, uint8_t *data)
 {
-	Serial.println("Calling read memory physical");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Calling read memory physical");
+	#endif
 
 	// Start sending
 	i2c_send_start();
@@ -201,7 +221,9 @@ uint8_t aes132p_read_memory_physical(uint8_t size, uint16_t word_address, uint8_
  */
 uint8_t aes132p_resync_physical(void)
 {
-	Serial.println("Resyncing");
+	#if AES_LIBRARY_DEBUG
+		Serial.println("Resyncing");
+	#endif
 
 	// Try to re-synchronize without sending a Wake token
 	// (step 1 of the re-synchronization process).
@@ -213,7 +235,9 @@ uint8_t aes132p_resync_physical(void)
 	if (ret_code == AES132_FUNCTION_RETCODE_SUCCESS) {
 		return ret_code;
 	} else {
-		Serial.println("Resync failed");
+		#if AES_LIBRARY_DEBUG
+			Serial.println("Resync failed");
+		#endif
 		return AES132_FUNCTION_RETCODE_COMM_FAIL;
 	}
 }
