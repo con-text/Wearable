@@ -33,6 +33,8 @@ String serverRandom;
 String serverCipher;
 bool cipherOK = false;
 
+const int vibrationPin = 3;
+
 /* State machine */
 State Advertising = State(advertising, NULL, NULL);
 State Connected = State(didConnect);
@@ -49,8 +51,12 @@ void setup()
   // Setup serial
   Serial.begin(9600);
   
+  // Setup vibration motor
+  pinMode(vibrationPin, OUTPUT);
+  
+  // For I2C
   Wire.begin();
-
+  
   // Test the AES
   // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
   // DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
@@ -352,6 +358,19 @@ String encryptMessageString(int key, uint8_t data[16])
   String encryptedMessage = stringFromUInt8(rxBuffer2, sizeof(rxBuffer2));
 
   return encryptedMessage;
+}
+
+/* Vibration Motor */
+void vibrate()
+{
+  digitalWrite(vibrationPin, HIGH);
+  delay(100);
+  digitalWrite(vibrationPin, LOW);
+  delay(100);
+  digitalWrite(vibrationPin, HIGH);
+  delay(250);
+  digitalWrite(vibrationPin, LOW);
+  delay(5000); 
 }
 
 /* Utilities */
