@@ -65,6 +65,8 @@ void loop()
 
 void advertising()
 {
+  // The AES chip should be sleeping
+  aes132c_sleep();
   // Reset everything
   serverCipher = "";
   serverRandom = "";
@@ -179,6 +181,9 @@ void waitingRandom()
 
 void resetVariables()
 {
+  // Sleep the AES chip
+  aes132c_standby();
+  
   Serial.println(F("---In reset state---"));
 
   serverCipher = "";
@@ -197,7 +202,7 @@ void RFduinoBLE_onConnect()
 void RFduinoBLE_onDisconnect()
 {
   Serial.println(F("Disconnected"));
-  //stateMachine.immediateTransitionTo(Advertising);
+//  stateMachine.immediateTransitionTo(ResetVariables);
 }
 
 /* Sending and receiving */
