@@ -4,7 +4,6 @@
 
 
 // Defines whether to use the AES crypto chip
-#define AES_HARDWARE 1
 #define AES_LIBRARY_DEBUG 0
 #define interval 5000
 
@@ -14,12 +13,8 @@
 #include <RFduinoBLE.h>
 
 // AES functions
-#if AES_HARDWARE
-  #include <aes132.h>
-  #include <aes132_commands.h>
-#else
-  #include <aes256.h>
-#endif
+#include <aes132.h>
+#include <aes132_commands.h>
 // Sizes of types
 #include <limits.h>
 // FSM Library
@@ -37,24 +32,6 @@ String sentRandom;
 String serverRandom;
 String serverCipher;
 bool cipherOK = false;
-
-// AES Encryption and Decryption
-#if AES_HARDWARE == 0
-  aes256_context ctxt;
-  
-  uint8_t keyOne[] = {
-  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-  0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f };
-
-  uint8_t keyTwo[] = {
-  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-  0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-  0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f };
-
-#endif
 
 /* State machine */
 State Advertising = State(advertising, NULL, NULL);
@@ -131,25 +108,16 @@ void waitingCipher()
     Serial.println(F("---Decoding received cipher--"));
     
     // Hardware has a MAC
-    #if AES_HARDWARE
-      uint8_t hexString[32];
-      uint8_t data[16];
-      uint8_t MAC[16];
-    #else
-      uint8_t hexString[16];
-    #endif
+    uint8_t hexString[32];
+    uint8_t data[16];
+    uint8_t MAC[16];
 
     // Convert the string to uint8
     uint8FromString(serverCipher, hexString);
     
-    #if AES_HARDWARE
-      memcpy(&MAC, &hexString, 16);
-      memcpy(&data, &hexString[16], 16);  
-      String decryptedString = decryptMessage(0, data, MAC);
-    #else
-      decryptMessage(0, hexString);
-      String decryptedString = stringFromUInt8(hexString, 16);
-    #endif
+    memcpy(&MAC, &hexString, 16);
+    memcpy(&data, &hexString[16], 16);  
+    String decryptedString = decryptMessage(0, data, MAC);
     
     if (decryptedString == "ERROR")
     {
@@ -188,12 +156,7 @@ void waitingRandom()
     // Convert the string to uint8
     uint8FromString(serverRandom, hexString);
     
-    #if AES_HARDWARE
-      String encryptedString = encryptMessageString(0, hexString);
-    #else
-      encryptMessage(0, hexString);
-      String encryptedString = stringFromUInt8(hexString, 16);
-    #endif
+    String encryptedString = encryptMessageString(0, hexString);
 
     if (encryptedString == "ERROR")
     {
@@ -314,10 +277,6 @@ void RFduinoBLE_onReceive(char *data, int len)
   }
 }
 
-/* AES Encryption and Decryption */
-
-#if AES_HARDWARE
-
 /* AES Hardware functions */
 String generate128BitRandom()
 {
@@ -389,77 +348,6 @@ String encryptMessageString(int key, uint8_t data[16])
 
   return encryptedMessage;
 }
-
-#else
-
-/* AES Software functions */
-
-String generate128BitRandom()
-{
-  uint8_t data[16];
-
-  unsigned long randomValue = micros();
-  randomSeed(randomValue);
-
-  long r = random(LONG_MAX);
-  long r1 = random(LONG_MAX);
-  long r2 = random(LONG_MAX);
-  long r3 = random(LONG_MAX);
-
-  memcpy(data, &r, sizeof(long));
-  memcpy(data + 4, &r1, sizeof(long));
-  memcpy(data + 8, &r2, sizeof(long));
-  memcpy(data + 12, &r3, sizeof(long));
-
-  // Turn the data array into a string
-  String randomString = stringFromUInt8(data, sizeof(data));
-  
-  return randomString;
-}
-
-void decryptMessage(int key, uint8_t data[16])
-{
-  // Setup the keys
-  if (key == 0) {
-    aes256_init(&ctxt, keyOne);
-  } else if (key == 1) {
-    aes256_init(&ctxt, keyTwo);
-  } else {
-    Serial.println(F("Unknown key specified"));
-  }
-
-  // Do the actual decryption
-  PrintHex8(F("Encrypted data: "), data, sizeof(data) * 4);
-  Serial.println(F("---Decrypting---"));
-  aes256_decrypt_ecb(&ctxt, data);
-  PrintHex8(F("Unencrypted data: "), data, sizeof(data) * 4);
-
-  // Clean up
-  aes256_done(&ctxt);
-}
-
-void encryptMessage(int key, uint8_t data[16])
-{
-  // Setup the keys
-  if (key == 0) {
-    aes256_init(&ctxt, keyOne);
-  } else if (key == 1) {
-    aes256_init(&ctxt, keyTwo);
-  } else {
-    Serial.println(F("Unknown key specified"));
-  }
-
-  // Do the actual encryption
-  PrintHex8(F("Unencrypted data: "), data, sizeof(data) * 4);
-  Serial.println(F("---Encrypting---"));
-  aes256_encrypt_ecb(&ctxt, data);
-  PrintHex8(F("Encrypted data: "), data, sizeof(data) * 4);
-
-  // Clean up
-  aes256_done(&ctxt);
-}
-
-#endif
 
 /* Utilities */
 
