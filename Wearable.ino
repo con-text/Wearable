@@ -193,6 +193,7 @@ void waitingRandom()
     // Convert the uint8 back to a string
     sendMessage(encryptedString);
     Serial.println("Sending encrypted string");
+    Serial.println(encryptedString);
 
     stateMachine.transitionTo(ResetVariables);
   }
@@ -411,9 +412,15 @@ String stringFromUInt8(uint8_t* data, int dataLength)
   String newString;
 
   for (int i = 0; i < dataLength; i++) {
+    
     if (data[i] == NULL) {
+      if ( (i == 0) || (i == 1) || (i == dataLength - 1) || (i == dataLength - 2)) {
+        continue;
+      }
+      hexMessage += "00";
       continue;
     }
+    
     newString = "";
     // Special case for 0
     if (data[i] < 0x10)
