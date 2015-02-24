@@ -27,6 +27,7 @@ elapsedMillis interruptTimer;
 // Variables
 String inputString = "";
 
+String typeOfConnect;
 String sentRandom;
 String serverRandom;
 String serverCipher;
@@ -36,6 +37,7 @@ const int vibrationPin = 3;
 
 /* State machine */
 State Advertising = State(advertising, NULL, NULL);
+State PreConnect = State(preConnect);
 State Connected = State(didConnect);
 State WaitingForCipher = State(resetTimer, waitingCipher, NULL);
 State WaitingForRandom = State(resetTimer, waitingRandom, NULL);
@@ -76,13 +78,31 @@ void advertising()
   serverCipher = "";
   serverRandom = "";
   sentRandom = "";
-
+  typeOfConnect = "";
+  
   Serial.println(F("---In advertising state---"));
 
   // Broadcast Bluetooth
   RFduinoBLE.advertisementData = "EA8F2A44";
   RFduinoBLE.deviceName = "Context";
   RFduinoBLE.begin();
+}
+
+void preConnect()
+{  
+  if (typeOfConnect == "LOGIN") 
+  {
+    Serial.println(F("---In login state---"));
+    // Vibrate
+    vibrate();
+  
+    //TODO: We need to listen for a button input at this point    
+    stateMachine.transitionTo(Connected);
+
+  } else if (typeOfConnect == "HEARTBEAT") {
+    Serial.println(F("---In heartbeat state---"));
+    stateMachine.transitionTo(Connected);
+  }
 }
 
 void didConnect()
@@ -101,9 +121,7 @@ void didConnect()
   Serial.println(F("Sending Random Number"));
   Serial.println(randomString);
   sendMessage(randomString);
-  stateMachine.immediateTransitionTo(WaitingForCipher);
-  
-  vibrate();
+  stateMachine.transitionTo(WaitingForCipher);
 }
 
 void resetTimer()
@@ -196,6 +214,7 @@ void resetVariables()
   serverCipher = "";
   serverRandom = "";
   sentRandom = "";
+  typeOfConnect = "";
 }
 
 
@@ -203,13 +222,15 @@ void resetVariables()
 
 void RFduinoBLE_onConnect()
 {
-  stateMachine.transitionTo(Connected);
+  Serial.println(F("Got connection"));
+
+  stateMachine.transitionTo(PreConnect);
 }
 
 void RFduinoBLE_onDisconnect()
 {
   Serial.println(F("Disconnected"));
-//  stateMachine.immediateTransitionTo(ResetVariables);
+ // stateMachine.transitionTo(ResetVariables);
 }
 
 /* Sending and receiving */
@@ -223,6 +244,8 @@ void receivedMessage(String message)
     serverCipher = message;
   } else if (stateMachine.isInState(WaitingForRandom)) {
     serverRandom = message;
+  } else if (stateMachine.isInState(PreConnect)) {
+    typeOfConnect = message;
   } else {
     Serial.println(F("Unknown state"));
   }
