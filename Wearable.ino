@@ -413,6 +413,7 @@ String stringFromUInt8(uint8_t* data, int dataLength)
 
   for (int i = 0; i < dataLength; i++) {
     
+    // An edge case because the data that has been cleaned up has been nulled, but the data could also be null
     if (data[i] == NULL) {
       if ( (i == 0) || (i == 1) || (i == dataLength - 1) || (i == dataLength - 2)) {
         continue;
