@@ -3,7 +3,6 @@
 */
 
 // Defines whether to use the AES crypto chip
-#define AES_LIBRARY_DEBUG 0
 #define interval 5000
 
 // Wire library
@@ -36,6 +35,7 @@ bool cipherOK = false;
 const int vibrationPin = 3;
 
 /* State machine */
+State Setup = State(firstSetup, NULL, NULL);
 State Advertising = State(advertising, NULL, NULL);
 State PreConnect = State(preConnect);
 State Connected = State(didConnect);
@@ -58,6 +58,10 @@ void setup()
   // For I2C
   Wire.begin();
   
+  delay(100);
+  
+  Serial.println(readSerialNumber());
+  
   // Test the AES
   // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
   // DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
@@ -65,10 +69,16 @@ void setup()
 
 void loop()
 {
-  stateMachine.update();
+  //stateMachine.update();
 }
 
 /* States */
+
+void firstSetup()
+{
+  
+  
+}
 
 void advertising()
 {
@@ -398,6 +408,16 @@ void vibrate()
 }
 
 /* Utilities */
+
+String readSerialNumber()
+{
+  uint8_t serialNumber[AES132_RESPONSE_SIZE_MIN + 8] = {0};
+  uint16_t address = 0xF000;
+   
+  aes132m_block_read(address, 8, serialNumber);
+  
+  return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 8);
+}
 
 void cleanupData(uint8_t *data, int dataLength)
 {
