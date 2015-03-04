@@ -61,10 +61,81 @@ void setup()
   delay(100);
   
   Serial.println(readSerialNumber());
+  Serial.println(readZoneConfig());
+  
+  // Write and/or read the UserID stored on the device
+  //writeUserID();
+  Serial.println(readUserID());
   
   // Test the AES
   // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
   // DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
+}
+
+void writeUserID() {
+  
+  char userID[] = "10155232305430398";
+  
+  // Stored in ASCII representation e.g. 0 = 30, 1 = 31, 2 = 32 etc.
+  uint16_t address = 0x0000;
+  
+  // Make array large enough to hold
+  // Length (2 bytes)
+  // Empty byte 0x00
+  // UserID in ASCII, one character at a time
+  uint8_t uid[sizeof(userID) + 3];
+  
+  String uidLength = String(strlen(userID));
+  uid[0] = uidLength[0];
+  uid[1] = uidLength[1];
+  uid[2] = 0x00;
+  
+  for (int i = 0; i < strlen(userID); i++) {
+    uid[i+3] = userID[i];
+  }
+ 
+  aes132c_write_memory(sizeof(userID) + 3 - 1, address, uid);
+
+}
+
+String readUserID() {
+  
+  // Read length of UserID from start of User Zone 0
+  uint16_t address = 0x0000;
+  uint8_t userIDLength[AES132_RESPONSE_SIZE_MIN + 2] = {0};
+  aes132m_block_read(address, 2, userIDLength);
+  
+  String userIDString = stringFromUInt8(userIDLength, AES132_RESPONSE_SIZE_MIN + 2);
+  
+  // No UserID has been written yet, must be a new device
+  if (userIDString[2] == 'F') {
+    return String("NimbleDevice");
+  } 
+  
+  // If a UserID has been written, read the correct number of characters
+  int userIDchars = 0;
+  userIDchars = asciiToNumerical(userIDString).toInt();
+  
+  address += 3;
+  uint8_t userIDStr[AES132_RESPONSE_SIZE_MIN + userIDchars];
+  memset( userIDStr, 0, (AES132_RESPONSE_SIZE_MIN + userIDchars)*sizeof(uint8_t) );
+   
+  aes132m_block_read(address, userIDchars, userIDStr);
+  
+  return asciiToNumerical(stringFromUInt8(userIDStr, AES132_RESPONSE_SIZE_MIN + userIDchars));
+  
+}
+
+String asciiToNumerical(String asciiString) {
+  
+  String trimmedPacket = asciiString.substring(2,asciiString.length()-4);
+  String fullString; 
+   
+  for (int i = 0; i < trimmedPacket.length(); i = i + 2) {
+    fullString += String(trimmedPacket.substring(i,i+2).toInt()-30);
+  }
+  
+  return fullString;
 }
 
 void loop()
@@ -417,6 +488,26 @@ String readSerialNumber()
   aes132m_block_read(address, 8, serialNumber);
   
   return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 8);
+}
+
+String readZoneConfig()
+{
+  uint8_t serialNumber[AES132_RESPONSE_SIZE_MIN + 4] = {0};
+  uint16_t address = 0xF0C0;
+   
+  aes132m_block_read(address, 4, serialNumber);
+  
+  return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 4);
+}
+
+
+String readUserMemory(uint16_t address)
+{
+  uint8_t serialNumber[AES132_RESPONSE_SIZE_MIN + 25] = {0};
+   
+  aes132m_block_read(address, 25, serialNumber);
+  
+  return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 25);
 }
 
 void cleanupData(uint8_t *data, int dataLength)
