@@ -3,7 +3,21 @@
 */
 
 // Defines whether to use the AES crypto chip
+#define AES_LIBRARY_DEBUG 0
 #define interval 5000
+
+// Proximity sensor
+#define VCNL4000_ADDRESS 0x13  // 0x26 write, 0x27 read
+#define COMMAND_0 0x80  // starts measurments, relays data ready info
+#define PRODUCT_ID 0x81  // product ID/revision ID, should read 0x11
+#define IR_CURRENT 0x83  // sets IR current in steps of 10mA 0-200mA
+#define AMBIENT_PARAMETER 0x84  // Configures ambient light measures
+#define AMBIENT_RESULT_MSB 0x85  // high byte of ambient light measure
+#define AMBIENT_RESULT_LSB 0x86  // low byte of ambient light measure
+#define PROXIMITY_RESULT_MSB 0x87  // High byte of proximity measure
+#define PROXIMITY_RESULT_LSB 0x88  // low byte of proximity measure
+#define PROXIMITY_FREQ 0x89  // Proximity IR test signal freq, 0-3
+#define PROXIMITY_MOD 0x8A  // proximity modulator timing
 
 // Wire library
 #include <Wire.h>
@@ -19,9 +33,11 @@
 #include <FiniteStateMachine.h>
 // Timing library
 #include <elapsedMillis.h>
+#include <Timer.h>
 
 // Disconnect automatically after 5s
 elapsedMillis interruptTimer;
+Timer t;
 
 // Variables
 String inputString = "";
@@ -34,8 +50,10 @@ bool cipherOK = false;
 
 const int vibrationPin = 3;
 
+bool isAdvertising = false;
+
 /* State machine */
-State Setup = State(firstSetup, NULL, NULL);
+State Setup = State(initialSetup);
 State Advertising = State(advertising, NULL, NULL);
 State PreConnect = State(preConnect);
 State Connected = State(didConnect);
@@ -43,7 +61,7 @@ State WaitingForCipher = State(resetTimer, waitingCipher, NULL);
 State WaitingForRandom = State(resetTimer, waitingRandom, NULL);
 State ResetVariables = State(resetVariables, NULL, NULL);
 
-FSM stateMachine = FSM(Advertising);
+FSM stateMachine = FSM(Setup);
 
 /* Arduino main functions */
 
@@ -58,98 +76,65 @@ void setup()
   // For I2C
   Wire.begin();
   
-  delay(100);
-  
   Serial.println(readSerialNumber());
   Serial.println(readZoneConfig());
   
   // Write and/or read the UserID stored on the device
   //writeUserID();
   Serial.println(readUserID());
-  
-  // Test the AES
-  // DUMP("KEY One: ", i, keyOne, sizeof(keyOne));
-  // DUMP("KEY Two: ", i, keyTwo, sizeof(keyTwo));
-}
-
-void writeUserID() {
-  
-  char userID[] = "10155232305430398";
-  
-  // Stored in ASCII representation e.g. 0 = 30, 1 = 31, 2 = 32 etc.
-  uint16_t address = 0x0000;
-  
-  // Make array large enough to hold
-  // Length (2 bytes)
-  // Empty byte 0x00
-  // UserID in ASCII, one character at a time
-  uint8_t uid[sizeof(userID) + 3];
-  
-  String uidLength = String(strlen(userID));
-  uid[0] = uidLength[0];
-  uid[1] = uidLength[1];
-  uid[2] = 0x00;
-  
-  for (int i = 0; i < strlen(userID); i++) {
-    uid[i+3] = userID[i];
-  }
  
-  aes132c_write_memory(sizeof(userID) + 3 - 1, address, uid);
-
-}
-
-String readUserID() {
-  
-  // Read length of UserID from start of User Zone 0
-  uint16_t address = 0x0000;
-  uint8_t userIDLength[AES132_RESPONSE_SIZE_MIN + 2] = {0};
-  aes132m_block_read(address, 2, userIDLength);
-  
-  String userIDString = stringFromUInt8(userIDLength, AES132_RESPONSE_SIZE_MIN + 2);
-  
-  // No UserID has been written yet, must be a new device
-  if (userIDString[2] == 'F') {
-    return String("NimbleDevice");
+ // Setup the proximity sensor
+  byte temp = readByte(PRODUCT_ID);
+  if (temp != 0x11) {
+   Serial.print("Something's wrong. Not reading correct ID: 0x");
+   abort();
   } 
-  
-  // If a UserID has been written, read the correct number of characters
-  int userIDchars = 0;
-  userIDchars = asciiToNumerical(userIDString).toInt();
-  
-  address += 3;
-  uint8_t userIDStr[AES132_RESPONSE_SIZE_MIN + userIDchars];
-  memset( userIDStr, 0, (AES132_RESPONSE_SIZE_MIN + userIDchars)*sizeof(uint8_t) );
    
-  aes132m_block_read(address, userIDchars, userIDStr);
-  
-  return asciiToNumerical(stringFromUInt8(userIDStr, AES132_RESPONSE_SIZE_MIN + userIDchars));
-  
-}
-
-String asciiToNumerical(String asciiString) {
-  
-  String trimmedPacket = asciiString.substring(2,asciiString.length()-4);
-  String fullString; 
-   
-  for (int i = 0; i < trimmedPacket.length(); i = i + 2) {
-    fullString += String(trimmedPacket.substring(i,i+2).toInt()-30);
-  }
-  
-  return fullString;
+  /* Now some VNCL400 initialization stuff
+    Feel free to play with any of these values, but check the datasheet first!*/
+  writeByte(AMBIENT_PARAMETER, 0x0F);  // Single conversion mode, 128 averages
+  writeByte(IR_CURRENT, 20);  // Set IR current to 200mA
+  writeByte(PROXIMITY_FREQ, 2);  // 781.25 kHz
+  writeByte(PROXIMITY_MOD, 0x81);  // 129, recommended by Vishay
+    
+  t.every(5000, pollWearable);
 }
 
 void loop()
 {
-  //stateMachine.update();
+  t.update();
+  
+  stateMachine.update();
+}
+
+void initialSetup()
+{
+  Serial.println("---In initial setup---");
+}
+
+void pollWearable()
+{
+  int proximityValue = readProximity();
+  
+  Serial.println(proximityValue, DEC);
+  
+  // There is something close to the device
+  if (proximityValue > 10000) {
+    // And we're not advertising
+    if (isAdvertising == false) {
+      isAdvertising = true;
+      stateMachine.transitionTo(Advertising);
+    }
+  } else {
+    // Not on wrist and is advertising so stop
+    if (isAdvertising == true) {
+      isAdvertising = false;
+      RFduinoBLE.end(); 
+    }
+  }  
 }
 
 /* States */
-
-void firstSetup()
-{
-  
-  
-}
 
 void advertising()
 {
@@ -162,7 +147,7 @@ void advertising()
   typeOfConnect = "";
   
   Serial.println(F("---In advertising state---"));
-
+  
   // Broadcast Bluetooth
   RFduinoBLE.advertisementData = "EA8F2A44";
   RFduinoBLE.deviceName = "Context";
@@ -195,6 +180,7 @@ void didConnect()
   if (randomString == "ERROR")
   {
     Serial.println("Error generating random number, resetting");
+    RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
 
@@ -230,6 +216,7 @@ void waitingCipher()
     if (decryptedString == "ERROR")
     {
       Serial.println("Error generating cipher, resetting");
+      RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
     }
 
@@ -269,6 +256,7 @@ void waitingRandom()
     if (encryptedString == "ERROR")
     {
       Serial.println("Error generating cipher, resetting");
+      RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
     }
     // Convert the uint8 back to a string
@@ -312,7 +300,6 @@ void RFduinoBLE_onConnect()
 void RFduinoBLE_onDisconnect()
 {
   Serial.println(F("Disconnected"));
- // stateMachine.transitionTo(ResetVariables);
 }
 
 /* Sending and receiving */
@@ -568,4 +555,129 @@ void PrintHex8(const __FlashStringHelper* message, uint8_t *data, uint8_t length
     Serial.print(" ");
   }
   Serial.println("");
+}
+
+// writeByte(address, data) writes a single byte of data to address
+void writeByte(byte address, byte data)
+{
+  Wire.beginTransmission(VCNL4000_ADDRESS);
+  Wire.write(address);
+  Wire.write(data);
+  Wire.endTransmission();
+}
+
+// readByte(address) reads a single byte of data from address
+byte readByte(byte address)
+{
+  byte data;
+  
+  Wire.beginTransmission(VCNL4000_ADDRESS);
+  Wire.write(address);
+  Wire.endTransmission();
+  Wire.requestFrom(VCNL4000_ADDRESS, 1);
+  while(!Wire.available())
+    ;
+  data = Wire.read();
+
+  return data;
+}
+
+// readProximity() returns a 16-bit value from the VCNL4000's proximity data registers
+unsigned int readProximity()
+{
+  unsigned int data;
+  byte temp;
+  
+  temp = readByte(COMMAND_0);
+  writeByte(COMMAND_0, temp | 0x08);  // command the sensor to perform a proximity measure
+  
+  while(!(readByte(COMMAND_0)&0x20)) 
+    ;  // Wait for the proximity data ready bit to be set
+  data = readByte(PROXIMITY_RESULT_MSB) << 8;
+  data |= readByte(PROXIMITY_RESULT_LSB);
+  
+  return data;
+}
+
+// readAmbient() returns a 16-bit value from the VCNL4000's ambient light data registers
+unsigned int readAmbient()
+{
+  unsigned int data;
+  byte temp;
+  
+  temp = readByte(COMMAND_0);
+  writeByte(COMMAND_0, temp | 0x10);  // command the sensor to perform ambient measure
+  
+  while(!(readByte(COMMAND_0)&0x40)) 
+    ;  // wait for the proximity data ready bit to be set
+  data = readByte(AMBIENT_RESULT_MSB) << 8;
+  data |= readByte(AMBIENT_RESULT_LSB);
+  
+  return data;
+}
+
+void writeUserID() {
+  
+  char userID[] = "10155232305430398";
+  
+  // Stored in ASCII representation e.g. 0 = 30, 1 = 31, 2 = 32 etc.
+  uint16_t address = 0x0000;
+  
+  // Make array large enough to hold
+  // Length (2 bytes)
+  // Empty byte 0x00
+  // UserID in ASCII, one character at a time
+  uint8_t uid[sizeof(userID) + 3];
+  
+  String uidLength = String(strlen(userID));
+  uid[0] = uidLength[0];
+  uid[1] = uidLength[1];
+  uid[2] = 0x00;
+  
+  for (int i = 0; i < strlen(userID); i++) {
+    uid[i+3] = userID[i];
+  }
+ 
+  aes132c_write_memory(sizeof(userID) + 3 - 1, address, uid);
+
+}
+
+String readUserID() {
+  
+  // Read length of UserID from start of User Zone 0
+  uint16_t address = 0x0000;
+  uint8_t userIDLength[AES132_RESPONSE_SIZE_MIN + 2] = {0};
+  aes132m_block_read(address, 2, userIDLength);
+  
+  String userIDString = stringFromUInt8(userIDLength, AES132_RESPONSE_SIZE_MIN + 2);
+  
+  // No UserID has been written yet, must be a new device
+  if (userIDString[2] == 'F') {
+    return String("NimbleDevice");
+  } 
+  
+  // If a UserID has been written, read the correct number of characters
+  int userIDchars = 0;
+  userIDchars = asciiToNumerical(userIDString).toInt();
+  
+  address += 3;
+  uint8_t userIDStr[AES132_RESPONSE_SIZE_MIN + userIDchars];
+  memset( userIDStr, 0, (AES132_RESPONSE_SIZE_MIN + userIDchars)*sizeof(uint8_t) );
+   
+  aes132m_block_read(address, userIDchars, userIDStr);
+  
+  return asciiToNumerical(stringFromUInt8(userIDStr, AES132_RESPONSE_SIZE_MIN + userIDchars));
+  
+}
+
+String asciiToNumerical(String asciiString) {
+  
+  String trimmedPacket = asciiString.substring(2,asciiString.length()-4);
+  String fullString; 
+   
+  for (int i = 0; i < trimmedPacket.length(); i = i + 2) {
+    fullString += String(trimmedPacket.substring(i,i+2).toInt()-30);
+  }
+  
+  return fullString;
 }
