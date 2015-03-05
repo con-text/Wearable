@@ -25,6 +25,8 @@
 #include "Arduino.h"
 #include "aes132_i2c.h"
 
+#define AES_LIBRARY_DEBUG 0
+
 // ------------------------ timing definitions -----------------------------------
 
 //! Poll this many ms for the device being ready for access.
