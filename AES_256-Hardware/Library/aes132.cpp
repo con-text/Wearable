@@ -658,7 +658,7 @@ uint8_t aes132c_receive_response(uint8_t size, uint8_t *response)
  */
 uint8_t aes132c_send_and_receive(uint8_t *command, uint8_t size, uint8_t *response, uint8_t options)
 {
-	#ifdef AES_LIBRARY_DEBUG
+	#if AES_LIBRARY_DEBUG
 		Serial.println("Entered send n recv");
 	#endif
 	uint8_t aes132_lib_return = aes132c_send_command(command, options);
