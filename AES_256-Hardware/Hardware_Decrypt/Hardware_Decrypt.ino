@@ -19,7 +19,7 @@ void setup() {
   Serial.println(randomString);
   
   /* UNCOMMENT FOR DECRYPTION */
-/*  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};
+  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer2);
   
   for (int i = 0; i < sizeof(rxBuffer2); i++) {
@@ -40,7 +40,7 @@ void setup() {
     
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
-  }*/
+  }
    
       
  /* UNCOMMENT FOR WRITING KEYS 

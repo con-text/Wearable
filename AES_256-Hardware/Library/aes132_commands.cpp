@@ -107,7 +107,7 @@ uint8_t randomNumber(uint8_t *result)
 /** This writes a key to the right area in memory */
 uint8_t writeKey(uint8_t *key, uint16_t keyID)
 {
-	uint16_t address = 0xF210;
+	uint16_t address = 0xF200;
 	// First write the key to memory
 	aes132c_write_memory(16, address, key);
 
@@ -117,7 +117,7 @@ uint8_t writeKey(uint8_t *key, uint16_t keyID)
 	keyConfig[1] = B11011000;
 	keyConfig[2] = B00000000;
 	keyConfig[3] = B00000000;
-	address = 0xF084;
+	address = 0xF080;
 	aes132c_write_memory(sizeof(keyConfig), address, (uint8_t*)&keyConfig);
 }
 
