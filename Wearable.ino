@@ -23,7 +23,8 @@
 #include <Wire.h>
 // RFDuino Library
 #include <RFduinoBLE.h>
-
+// Touch sensor
+#include <ADXL345.h>
 // AES functions
 #include <aes132.h>
 #include <aes132_commands.h>
@@ -40,6 +41,8 @@ elapsedMillis interruptTimer;
 Timer t;
 
 // Variables
+ADXL345 accel = ADXL345();
+
 String inputString = "";
 
 String typeOfConnect;
@@ -50,6 +53,7 @@ bool cipherOK = false;
 
 const int sdaPin = 6;
 const int vibrationPin = 4;
+const int INTERRUPT_PIN = 2;
 
 bool isAdvertising = false;
 
@@ -57,6 +61,7 @@ bool isAdvertising = false;
 State Setup = State(initialSetup);
 State Advertising = State(advertising, NULL, NULL);
 State PreConnect = State(preConnect);
+State WaitForButtonInput = State(resetTimer, waitForButtonInput, NULL);
 State Connected = State(didConnect);
 State WaitingForCipher = State(resetTimer, waitingCipher, NULL);
 State WaitingForRandom = State(resetTimer, waitingRandom, NULL);
@@ -73,6 +78,7 @@ void setup()
   
   // Setup vibration motor
   pinMode(vibrationPin, OUTPUT);
+  pinMode(INTERRUPT_PIN, INPUT);
   
   // For I2C
   Wire.begin();
@@ -99,6 +105,13 @@ void setup()
   writeByte(PROXIMITY_MOD, 0x81);  // 129, recommended by Vishay
     
   t.every(5000, pollWearable);
+  
+  while (!accel.begin()) {
+      Serial.println("No ADXL345 detected...");
+  } 
+  
+  Serial.println("Found ADXL345 :)"); 
+  accel.setupTapInterrupts();
 }
 
 void loop()
@@ -162,16 +175,36 @@ void preConnect()
     Serial.println(F("---In login state---"));
     // Vibrate
     vibrate();
-  
-  
-    //TODO: We need to listen for a button input at this point    
-    stateMachine.transitionTo(Connected);
+
+    // Wait for a button input  
+    stateMachine.transitionTo(WaitForButtonInput);
 
   } else if (typeOfConnect == "HEARTBEAT") {
     Serial.println(F("---In heartbeat state---"));
     stateMachine.transitionTo(Connected);
   }
 }
+
+void waitForButtonInput()
+{
+  int interruptSource = accel.readInterruptSource();
+   // we use a digitalRead instead of attachInterrupt so that we can use delay()
+  if(digitalRead(INTERRUPT_PIN)) {
+    // Weird case where we're getting all the bits set
+    if ((interruptSource != 255) && (interruptSource & B00100000)) {
+      Serial.println("Double tap");
+      vibrateOnce();
+      stateMachine.transitionTo(Connected);
+    }
+  }
+  
+  if (interruptTimer > interval) {
+    Serial.println(F("Didn't receive tap acknowledgement, cancelling."));
+    RFduinoBLE.end();
+    stateMachine.transitionTo(Advertising);
+  }
+}
+
 
 void didConnect()
 {
@@ -464,6 +497,13 @@ void vibrate()
   delay(100);
   digitalWrite(vibrationPin, HIGH);
   delay(250);
+  digitalWrite(vibrationPin, LOW);
+}
+
+void vibrateOnce()
+{
+  digitalWrite(vibrationPin, HIGH);
+  delay(100);
   digitalWrite(vibrationPin, LOW);
 }
 
