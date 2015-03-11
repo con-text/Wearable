@@ -48,7 +48,8 @@ String serverRandom;
 String serverCipher;
 bool cipherOK = false;
 
-const int vibrationPin = 3;
+const int sdaPin = 6;
+const int vibrationPin = 4;
 
 bool isAdvertising = false;
 
@@ -161,6 +162,7 @@ void preConnect()
     Serial.println(F("---In login state---"));
     // Vibrate
     vibrate();
+  
   
     //TODO: We need to listen for a button input at this point    
     stateMachine.transitionTo(Connected);
