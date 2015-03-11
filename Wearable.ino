@@ -503,7 +503,7 @@ void vibrate()
 void vibrateOnce()
 {
   digitalWrite(vibrationPin, HIGH);
-  delay(100);
+  delay(250);
   digitalWrite(vibrationPin, LOW);
 }
 
