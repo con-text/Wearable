@@ -24,6 +24,7 @@ void loop() {
   int interruptSource = accel.readInterruptSource();
    // we use a digitalRead instead of attachInterrupt so that we can use delay()
   if(digitalRead(INTERRUPT_PIN)) {
+    Serial.println(interruptSource, BIN);
     // Weird case where we're getting all the bits set
     if ((interruptSource != 255) && (interruptSource & B00100000)) {
       Serial.println("Double tap");
