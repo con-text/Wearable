@@ -172,11 +172,14 @@ void preConnect()
   if (typeOfConnect == "LOGIN") 
   {
     Serial.println(F("---In login state---"));
+    
     // Vibrate
     vibrate();
+    
+    typeOfConnect = "";
 
     // Wait for a button input  
-    stateMachine.transitionTo(WaitForButtonInput);
+    stateMachine.immediateTransitionTo(WaitForButtonInput);
 
   } else if (typeOfConnect == "HEARTBEAT") {
     Serial.println(F("---In heartbeat state---"));
