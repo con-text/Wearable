@@ -51,8 +51,7 @@ String serverRandom;
 String serverCipher;
 bool cipherOK = false;
 
-const int sdaPin = 6;
-const int vibrationPin = 4;
+const int vibrationPin = 3;
 const int INTERRUPT_PIN = 2;
 
 bool isAdvertising = false;
@@ -496,14 +495,14 @@ void vibrate()
   digitalWrite(vibrationPin, LOW);
   delay(100);
   digitalWrite(vibrationPin, HIGH);
-  delay(250);
+  delay(100);
   digitalWrite(vibrationPin, LOW);
 }
 
 void vibrateOnce()
 {
   digitalWrite(vibrationPin, HIGH);
-  delay(250);
+  delay(100);
   digitalWrite(vibrationPin, LOW);
 }
 
