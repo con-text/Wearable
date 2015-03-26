@@ -84,10 +84,6 @@ void setup()
   
   Serial.println(readSerialNumber());
   Serial.println(readZoneConfig());
-  
-  // Write and/or read the UserID stored on the device
-  //writeUserID();
-  Serial.println(readUserID());
  
  // Setup the proximity sensor
   byte temp = readByte(PRODUCT_ID);
@@ -161,9 +157,22 @@ void advertising()
   
   Serial.println(F("---In advertising state---"));
   
+  // Write the UserID stored on the device
+  //writeUserID();
+  
+  String dataToAdvertise = readUserID();
+  
+  Serial.println("USERID:");
+  Serial.println(dataToAdvertise);
+  
+  char dataToAdvertiseArray[dataToAdvertise.length() + 1];
+  
+  dataToAdvertise.toCharArray(dataToAdvertiseArray, dataToAdvertise.length() + 1);
+  
   // Broadcast Bluetooth
-  RFduinoBLE.advertisementData = "EA8F2A44";
-  RFduinoBLE.deviceName = "Context";
+  RFduinoBLE.advertisementInterval = 200;
+  RFduinoBLE.advertisementData = dataToAdvertiseArray;
+  RFduinoBLE.deviceName = "Nimble";
   RFduinoBLE.begin();
 }
 
@@ -662,7 +671,8 @@ unsigned int readAmbient()
 
 void writeUserID() {
   
-  char userID[] = "10155232305430398";
+  //char userID[] = "10155232305430398";
+  char userID[] = "1234567";
   
   // Stored in ASCII representation e.g. 0 = 30, 1 = 31, 2 = 32 etc.
   uint16_t address = 0x0000;
@@ -697,7 +707,7 @@ String readUserID() {
   
   // No UserID has been written yet, must be a new device
   if (userIDString[2] == 'F') {
-    return String("NimbleDevice");
+    return String("Nimble");
   } 
   
   // If a UserID has been written, read the correct number of characters
@@ -711,7 +721,7 @@ String readUserID() {
   aes132m_block_read(address, userIDchars, userIDStr);
   
   return asciiToNumerical(stringFromUInt8(userIDStr, AES132_RESPONSE_SIZE_MIN + userIDchars));
-  
+  //return String("Nimble");
 }
 
 String asciiToNumerical(String asciiString) {
