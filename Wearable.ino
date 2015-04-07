@@ -57,7 +57,7 @@ const int INTERRUPT_PIN = 2;
 bool isAdvertising = false;
 
 /* State machine */
-State Setup = State(initialSetup);
+State Setup = State(initialSetupBegin, NULL, NULL);
 State Advertising = State(advertising, NULL, NULL);
 State PreConnect = State(preConnect);
 State WaitForButtonInput = State(resetTimer, waitForButtonInput, NULL);
@@ -88,14 +88,14 @@ void setup()
  // Setup the proximity sensor
   byte temp = readByte(PRODUCT_ID);
   if (temp != 0x11) {
-   Serial.print("Something's wrong. Not reading correct ID: 0x");
+   Serial.print("Something's wrong. Not reading correct ID for proximity sensor.");
    abort();
   } 
    
   /* Now some VNCL400 initialization stuff
     Feel free to play with any of these values, but check the datasheet first!*/
   writeByte(AMBIENT_PARAMETER, 0x0F);  // Single conversion mode, 128 averages
-  writeByte(IR_CURRENT, 20);  // Set IR current to 200mA
+  writeByte(IR_CURRENT, 1);  // Set IR current to 10mA
   writeByte(PROXIMITY_FREQ, 2);  // 781.25 kHz
   writeByte(PROXIMITY_MOD, 0x81);  // 129, recommended by Vishay
     
@@ -103,6 +103,7 @@ void setup()
   
   while (!accel.begin()) {
       Serial.println("No ADXL345 detected...");
+      abort();
   } 
   
   Serial.println("Found ADXL345 :)"); 
@@ -116,7 +117,7 @@ void loop()
   stateMachine.update();
 }
 
-void initialSetup()
+void initialSetupBegin()
 {
   Serial.println("---In initial setup---");
 }
@@ -128,7 +129,7 @@ void pollWearable()
   Serial.println(proximityValue, DEC);
   
   // There is something close to the device
-  if (proximityValue > 10000) {
+  if (proximityValue > 4000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
@@ -648,23 +649,6 @@ unsigned int readProximity()
     ;  // Wait for the proximity data ready bit to be set
   data = readByte(PROXIMITY_RESULT_MSB) << 8;
   data |= readByte(PROXIMITY_RESULT_LSB);
-  
-  return data;
-}
-
-// readAmbient() returns a 16-bit value from the VCNL4000's ambient light data registers
-unsigned int readAmbient()
-{
-  unsigned int data;
-  byte temp;
-  
-  temp = readByte(COMMAND_0);
-  writeByte(COMMAND_0, temp | 0x10);  // command the sensor to perform ambient measure
-  
-  while(!(readByte(COMMAND_0)&0x40)) 
-    ;  // wait for the proximity data ready bit to be set
-  data = readByte(AMBIENT_RESULT_MSB) << 8;
-  data |= readByte(AMBIENT_RESULT_LSB);
   
   return data;
 }
