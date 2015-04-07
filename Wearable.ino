@@ -43,12 +43,22 @@ Timer t;
 // Variables
 ADXL345 accel = ADXL345();
 
+String serialNum = "";
+
 String inputString = "";
 
 String typeOfConnect;
 String sentRandom;
+
+String accountID = "";
+bool setupOK = false;
+
+bool deviceLocked = false;
+
 String serverRandom;
 String serverCipher;
+
+
 bool cipherOK = false;
 
 const int vibrationPin = 3;
@@ -62,8 +72,13 @@ State Advertising = State(advertising, NULL, NULL);
 State PreConnect = State(preConnect);
 State WaitForButtonInput = State(resetTimer, waitForButtonInput, NULL);
 State Connected = State(didConnect);
+
+State WaitingForID = State(resetTimer, waitingID, NULL);
+State WaitingForAck = State(resetTimer, waitingAck, NULL);
+
 State WaitingForCipher = State(resetTimer, waitingCipher, NULL);
 State WaitingForRandom = State(resetTimer, waitingRandom, NULL);
+
 State ResetVariables = State(resetVariables, NULL, NULL);
 
 FSM stateMachine = FSM(Setup);
@@ -82,8 +97,16 @@ void setup()
   // For I2C
   Wire.begin();
   
-  Serial.println(readSerialNumber());
-  Serial.println(readZoneConfig());
+  // Uncomment this to wipe the current ID written to the chip
+  //resetUserID();
+  
+  serialNum = readSerialNumber();
+  accountID = readUserID();
+  
+  Serial.println(serialNum);
+  Serial.println(accountID);
+  
+  //Serial.println(readZoneConfig());
  
  // Setup the proximity sensor
   byte temp = readByte(PRODUCT_ID);
@@ -150,26 +173,34 @@ void advertising()
 {
   // The AES chip should be sleeping
   aes132c_sleep();
+  
   // Reset everything
   serverCipher = "";
   serverRandom = "";
   sentRandom = "";
   typeOfConnect = "";
+  setupOK = false;
   
   Serial.println(F("---In advertising state---"));
+      
+  char dataToAdvertiseArray[accountID.length() + 1];
+  accountID.toCharArray(dataToAdvertiseArray, accountID.length() + 1);
   
-  // Write the UserID stored on the device
-  //writeUserID();
+  // Not on wrist - not advertising
   
-  String dataToAdvertise = readUserID();
-  
-  Serial.println("USERID:");
-  Serial.println(dataToAdvertise);
-  
-  char dataToAdvertiseArray[dataToAdvertise.length() + 1];
-  
-  dataToAdvertise.toCharArray(dataToAdvertiseArray, dataToAdvertise.length() + 1);
-  
+  // If on wrist:
+  // Not setup, advertising 4E1F1FB0-95C9-4C54-88CB-6B9F3192CDD1
+  // Setup but locked, advertising 79E7C777-15B4-406A-84C2-DEB389EA85E1
+  // Setup and unlocked, advertising 2220
+
+  if (!isDeviceSetup()) {
+      RFduinoBLE.customUUID = "4E1F1FB0-95C9-4C54-88CB-6B9F3192CDD1";
+  } else if (isDeviceLocked()) {
+      RFduinoBLE.customUUID = "79E7C777-15B4-406A-84C2-DEB389EA85E1";      
+  } else {
+      RFduinoBLE.customUUID = "";   
+  }
+
   // Broadcast Bluetooth
   RFduinoBLE.advertisementInterval = 200;
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
@@ -179,8 +210,23 @@ void advertising()
 
 void preConnect()
 {  
-  if (typeOfConnect == "LOGIN") 
-  {
+  
+  if ((typeOfConnect == "SETUP") && (!isDeviceSetup())) {
+    Serial.println(F("---In setup state---"));
+    
+    Serial.println("Sending ok back..");
+    sendMessage("OK");
+    
+    // Needs to receive ID from phone
+    // Send serial number back (serialNum)
+    // Upon acknowledge, write ID to chip
+    
+    typeOfConnect = "";
+    
+    stateMachine.immediateTransitionTo(WaitingForID);
+    
+    
+  } else if (typeOfConnect == "LOGIN" && isDeviceSetup()) {
     Serial.println(F("---In login state---"));
     
     // Vibrate
@@ -190,8 +236,8 @@ void preConnect()
 
     // Wait for a button input  
     stateMachine.immediateTransitionTo(WaitForButtonInput);
-
-  } else if (typeOfConnect == "HEARTBEAT") {
+  
+  } else if (typeOfConnect == "HEARTBEAT" && isDeviceSetup()) {
     Serial.println(F("---In heartbeat state---"));
     stateMachine.transitionTo(Connected);
   }
@@ -241,6 +287,46 @@ void didConnect()
 void resetTimer()
 {
   interruptTimer = 0;
+}
+
+void waitingID()
+{
+  if (!isDeviceSetup()) {
+    Serial.println(F("---Received an ID from phone--"));
+    
+    // Send serial number as response
+    sendMessage(serialNum);
+    
+    // Now wait for an acknowledgement before writing ID to device
+    stateMachine.immediateTransitionTo(WaitingForAck);
+  }
+  
+  if (interruptTimer > interval) {
+    Serial.println(F("Didn't receive ID, disconnecting."));
+    RFduinoBLE.end();
+    stateMachine.transitionTo(Advertising);
+  }
+}
+
+void waitingAck()
+{
+  if ((setupOK == true) && (accountID != "Nimble")) {
+    Serial.println(F("---Received an Ack from phone--"));
+
+    // Write the UserID provided by the phone
+    writeUserID(accountID);
+    
+    delay(100);
+    
+    RFduinoBLE.end();
+    stateMachine.transitionTo(Advertising);
+  }
+  
+  if (interruptTimer > interval) {
+    Serial.println(F("Didn't receive acknowledgment, disconnecting."));
+    RFduinoBLE.end();
+    stateMachine.transitionTo(Advertising);
+  }
 }
 
 void waitingCipher()
@@ -332,6 +418,7 @@ void resetVariables()
   serverRandom = "";
   sentRandom = "";
   typeOfConnect = "";
+  setupOK = false;
 }
 
 
@@ -362,6 +449,10 @@ void receivedMessage(String message)
     serverRandom = message;
   } else if (stateMachine.isInState(PreConnect)) {
     typeOfConnect = message;
+  } else if (stateMachine.isInState(WaitingForID)) {
+    accountID = message; 
+  } else if (stateMachine.isInState(WaitingForAck)) {
+    if (message == "OK") setupOK = true;    
   } else {
     Serial.println(F("Unknown state"));
   }
@@ -653,10 +744,13 @@ unsigned int readProximity()
   return data;
 }
 
-void writeUserID() {
+void writeUserID(String accID) {
+  
+  char userID[accID.length() + 1];
+  accID.toCharArray(userID, accID.length() + 1);
   
   //char userID[] = "10155232305430398";
-  char userID[] = "1234567";
+  //char userID[] = "1234567";
   
   // Stored in ASCII representation e.g. 0 = 30, 1 = 31, 2 = 32 etc.
   uint16_t address = 0x0000;
@@ -678,6 +772,17 @@ void writeUserID() {
  
   aes132c_write_memory(sizeof(userID) + 3 - 1, address, uid);
 
+}
+
+void resetUserID() {
+  uint16_t address = 0x0000;
+  uint8_t uid[10];
+  
+  for (int i = 0; i < 10; i++) {
+    uid[i] = 0xFF;
+  }
+  
+  aes132c_write_memory(10, address, uid);
 }
 
 String readUserID() {
@@ -705,7 +810,6 @@ String readUserID() {
   aes132m_block_read(address, userIDchars, userIDStr);
   
   return asciiToNumerical(stringFromUInt8(userIDStr, AES132_RESPONSE_SIZE_MIN + userIDchars));
-  //return String("Nimble");
 }
 
 String asciiToNumerical(String asciiString) {
@@ -719,3 +823,17 @@ String asciiToNumerical(String asciiString) {
   
   return fullString;
 }
+
+bool isDeviceSetup() {
+  if ((accountID != "") && (accountID != "Nimble")) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
+bool isDeviceLocked() {
+  return deviceLocked;
+}
+
