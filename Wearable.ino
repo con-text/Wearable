@@ -98,7 +98,7 @@ void setup()
   Wire.begin();
   
   // Uncomment this to wipe the current ID written to the chip
-  //resetUserID();
+  resetUserID();
   
   serialNum = readSerialNumber();
   accountID = readUserID();

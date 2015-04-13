@@ -61,16 +61,21 @@ void ADXL345::setupTapInterrupts()
   writeRegister(ADXL345_REG_LATENT, 0x40);
   // Setup double tap window
   writeRegister(ADXL345_REG_WINDOW, 0xFF);
-
-  // Setup power control
-  writeRegister(ADXL345_REG_POWER_CTL, B00001001);
   // Setup data format
-  writeRegister(ADXL345_REG_DATA_FORMAT, B00001010);
+  writeRegister(ADXL345_REG_DATA_FORMAT, B00001000);
 
   // Setup the interrupt pin to be 0
-  writeRegister(ADXL345_REG_INT_MAP, 0);
+  writeRegister(ADXL345_REG_INT_MAP, 0x00);
   // Enable single and double tap interrupt
   writeRegister(ADXL345_REG_INT_ENABLE, B00100000);
+
+  // Setup power control but in sleep mode
+  writeRegister(ADXL345_REG_POWER_CTL, B00000001);
+}
+
+void ADXL345::enableReadings()
+{
+  writeRegister(ADXL345_REG_POWER_CTL, B00001001);
 }
 
 uint8_t ADXL345::readInterruptSource()
