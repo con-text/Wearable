@@ -234,6 +234,8 @@ void preConnect()
     
     typeOfConnect = "";
 
+    // Enable accelerometer readings
+    accel.enableReadings();
     // Wait for a button input  
     stateMachine.immediateTransitionTo(WaitForButtonInput);
   

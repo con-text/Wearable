@@ -50,7 +50,8 @@ class ADXL345 {
             uint8_t getDeviceID();
             void setupTapInterrupts();
             uint8_t readInterruptSource();
-
+            void enableReadings();
+            void disableReadings();
 
       private:
             inline void writeRegister(uint8_t reg, uint8_t value);
