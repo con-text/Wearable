@@ -259,6 +259,7 @@ void waitForButtonInput()
   }
   
   if (interruptTimer > interval) {
+    accel.disableReadings();
     Serial.println(F("Didn't receive tap acknowledgement, cancelling."));
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
