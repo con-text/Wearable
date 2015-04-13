@@ -3,7 +3,7 @@
 */
 
 // Defines whether to use the AES crypto chip
-#define AES_LIBRARY_DEBUG 0
+#define AES_LIBRARY_DEBUG 1
 #define interval 5000
 
 // Proximity sensor
@@ -234,8 +234,6 @@ void preConnect()
     
     typeOfConnect = "";
 
-    // Enable accelerometer readings
-    accel.enableReadings();
     // Wait for a button input  
     stateMachine.immediateTransitionTo(WaitForButtonInput);
   
@@ -259,7 +257,6 @@ void waitForButtonInput()
   }
   
   if (interruptTimer > interval) {
-    accel.disableReadings();
     Serial.println(F("Didn't receive tap acknowledgement, cancelling."));
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
@@ -294,7 +291,7 @@ void resetTimer()
 
 void waitingID()
 {
-  if (!isDeviceSetup()) {
+  if (isDeviceSetup() == true) {
     Serial.println(F("---Received an ID from phone--"));
     
     // Send serial number as response
@@ -454,7 +451,9 @@ void receivedMessage(String message)
     typeOfConnect = message;
   } else if (stateMachine.isInState(WaitingForID)) {
     accountID = message; 
+    Serial.println("Still in state");
   } else if (stateMachine.isInState(WaitingForAck)) {
+    Serial.println("Setting oK");
     if (message == "OK") setupOK = true;    
   } else {
     Serial.println(F("Unknown state"));
