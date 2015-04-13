@@ -69,7 +69,7 @@ bool isAdvertising = false;
 /* State machine */
 State Setup = State(initialSetupBegin, NULL, NULL);
 State Advertising = State(advertising, NULL, NULL);
-State PreConnect = State(preConnect);
+State PreConnect = State(resetTimer, preConnect, NULL);
 State WaitForButtonInput = State(resetTimer, waitForButtonInput, NULL);
 State Connected = State(didConnect);
 
@@ -98,7 +98,7 @@ void setup()
   Wire.begin();
   
   // Uncomment this to wipe the current ID written to the chip
-  resetUserID();
+  //resetUserID();
   
   serialNum = readSerialNumber();
   accountID = readUserID();
@@ -240,6 +240,12 @@ void preConnect()
   } else if (typeOfConnect == "HEARTBEAT" && isDeviceSetup()) {
     Serial.println(F("---In heartbeat state---"));
     stateMachine.transitionTo(Connected);
+  }
+  
+  if (interruptTimer > interval) {
+    Serial.println(F("Didn't receive start of protocol, disconnecting."));
+    RFduinoBLE.end();
+    stateMachine.transitionTo(Advertising);
   }
 }
 
