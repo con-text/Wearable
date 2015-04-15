@@ -54,6 +54,7 @@ String accountID = "";
 bool setupOK = false;
 
 bool deviceLocked = false;
+bool unlockRequested = false;
 
 String serverRandom;
 String serverCipher;
@@ -69,6 +70,7 @@ bool isAdvertising = false;
 /* State machine */
 State Setup = State(initialSetupBegin, NULL, NULL);
 State Advertising = State(advertising, NULL, NULL);
+State GoToAdvertising = State(goToAdvertising, NULL, NULL);
 State PreConnect = State(resetTimer, preConnect, NULL);
 State WaitForButtonInput = State(resetTimer, waitForButtonInput, NULL);
 State Connected = State(didConnect);
@@ -108,7 +110,7 @@ void setup()
   
   //Serial.println(readZoneConfig());
  
- // Setup the proximity sensor
+  // Setup the proximity sensor
   byte temp = readByte(PRODUCT_ID);
   if (temp != 0x11) {
    Serial.print("Something's wrong. Not reading correct ID for proximity sensor.");
@@ -121,6 +123,10 @@ void setup()
   writeByte(IR_CURRENT, 1);  // Set IR current to 10mA
   writeByte(PROXIMITY_FREQ, 2);  // 781.25 kHz
   writeByte(PROXIMITY_MOD, 0x81);  // 129, recommended by Vishay
+  
+  if (isDeviceSetup()) {
+    deviceLocked = true;
+  }
     
   t.every(5000, pollWearable);
   
@@ -156,15 +162,29 @@ void pollWearable()
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
-      stateMachine.transitionTo(Advertising);
+      Serial.println("Tranisition to advertising");
+      stateMachine.transitionTo(GoToAdvertising);
     }
   } else {
     // Not on wrist and is advertising so stop
     if (isAdvertising == true) {
       isAdvertising = false;
+      
+      // Lock the device if the device has been set up
+      
+      if (isDeviceSetup()) {
+        Serial.println("Locking the device.");
+        deviceLocked = true;
+      }
+      
       RFduinoBLE.end(); 
     }
   }  
+}
+
+void goToAdvertising()
+{
+  stateMachine.transitionTo(Advertising);
 }
 
 /* States */
@@ -202,7 +222,13 @@ void advertising()
   }
 
   // Broadcast Bluetooth
-  RFduinoBLE.advertisementInterval = 200;
+  
+  if (isDeviceLocked()) {
+    RFduinoBLE.advertisementInterval = 1000;
+  } else {
+    RFduinoBLE.advertisementInterval = 200;
+  }
+ 
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
   RFduinoBLE.deviceName = "Nimble";
   RFduinoBLE.begin();
@@ -226,7 +252,7 @@ void preConnect()
     stateMachine.immediateTransitionTo(WaitingForID);
     
     
-  } else if (typeOfConnect == "LOGIN" && isDeviceSetup()) {
+  } else if (typeOfConnect == "LOGIN" && isDeviceSetup() && !isDeviceLocked()) {
     Serial.println(F("---In login state---"));
     
     // Vibrate
@@ -237,7 +263,15 @@ void preConnect()
     // Wait for a button input  
     stateMachine.immediateTransitionTo(WaitForButtonInput);
   
-  } else if (typeOfConnect == "HEARTBEAT" && isDeviceSetup()) {
+  } else if (typeOfConnect == "UNLOCK" && isDeviceSetup() && isDeviceLocked()) {
+    Serial.println(F("---In unlock state---"));
+    
+    typeOfConnect = "";
+    unlockRequested = true;
+
+    stateMachine.transitionTo(Connected);
+  
+  } else if (typeOfConnect == "HEARTBEAT" && isDeviceSetup() && !isDeviceLocked()) {
     Serial.println(F("---In heartbeat state---"));
     stateMachine.transitionTo(Connected);
   }
@@ -344,6 +378,8 @@ void waitingCipher()
     uint8_t hexString[32];
     uint8_t data[16];
     uint8_t MAC[16];
+  
+    Serial.println(serverCipher);
 
     // Convert the string to uint8
     uint8FromString(serverCipher, hexString);
@@ -365,8 +401,22 @@ void waitingCipher()
     if (decryptedString == sentRandom) {
       Serial.println(F("Got the correct random value"));
       sendMessage("OK");
-      stateMachine.transitionTo(WaitingForRandom);
+      
+      // If it was an unlock request - see if successful, unlock and return to advertising
+      if (unlockRequested == true) {
+        deviceLocked = false;
+        unlockRequested = false;
+        isAdvertising = false;
+        Serial.println(F("Unlock was successful."));
+        RFduinoBLE.end();
+        stateMachine.transitionTo(ResetVariables);
+      } else {
+        // In the normal protocol, now await random from other party 
+        stateMachine.transitionTo(WaitingForRandom);
+      }
+      
     } else {
+      Serial.println(decryptedString);
       Serial.println(F("Incorrect random, fuck off server"));
       RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
@@ -459,7 +509,7 @@ void receivedMessage(String message)
     accountID = message; 
     Serial.println("Still in state");
   } else if (stateMachine.isInState(WaitingForAck)) {
-    Serial.println("Setting oK");
+    Serial.println("Setting OK");
     if (message == "OK") setupOK = true;    
   } else {
     Serial.println(F("Unknown state"));
