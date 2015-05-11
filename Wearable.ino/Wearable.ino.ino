@@ -6,6 +6,20 @@
 #define AES_LIBRARY_DEBUG 1
 #define interval 5000
 
+#define DEBUG
+
+#ifdef DEBUG
+ #define DEBUG_PRINTLN(x)  Serial.println(x)
+ #define DEBUG_PRINTLNDEC(x)  Serial.println(x, DEC) 
+ #define DEBUG_PRINT(x)  Serial.print(x) 
+ #define DEBUG_PRINTHEX(x)  Serial.print(x, HEX)  
+#else
+ #define DEBUG_PRINTLN(x) 
+ #define DEBUG_PRINTLNDEC(x)
+ #define DEBUG_PRINT(x)
+ #define DEBUG_PRINTHEX(x) 
+#endif
+
 // Proximity sensor
 #define VCNL4000_ADDRESS 0x13  // 0x26 write, 0x27 read
 #define COMMAND_0 0x80  // starts measurments, relays data ready info
@@ -87,8 +101,11 @@ FSM stateMachine = FSM(Setup);
 
 void setup()
 {
-  // Setup serial
-  Serial.begin(9600);
+  
+  #ifdef DEBUG
+     // Setup serial
+     Serial.begin(9600);
+  #endif
 
   // Setup vibration motor
   pinMode(vibrationPin, OUTPUT);
@@ -103,15 +120,15 @@ void setup()
   serialNum = readSerialNumber();
   accountID = readUserID();
 
-  Serial.println(serialNum);
-  Serial.println(accountID);
+  DEBUG_PRINTLN(serialNum);
+  DEBUG_PRINTLN(accountID);
 
-  //Serial.println(readZoneConfig());
+  //DEBUG_PRINTLN(readZoneConfig());
 
   // Setup the proximity sensor
   byte temp = readByte(PRODUCT_ID);
   if (temp != 0x11) {
-    Serial.print("Something's wrong. Not reading correct ID for proximity sensor.");
+    DEBUG_PRINT("Something's wrong. Not reading correct ID for proximity sensor.");
     abort();
   }
 
@@ -128,11 +145,11 @@ void setup()
   t.every(5000, pollWearable);
 
   while (!accel.begin()) {
-    Serial.println("No ADXL345 detected...");
+    DEBUG_PRINTLN("No ADXL345 detected...");
     abort();
   }
 
-  Serial.println("Found ADXL345 :)");
+  DEBUG_PRINTLN("Found ADXL345 :)");
   accel.setupTapInterrupts();
 }
 
@@ -149,21 +166,21 @@ void loop()
 
 void initialSetupBegin()
 {
-  Serial.println("---In initial setup---");
+  DEBUG_PRINTLN("---In initial setup---");
 }
 
 void pollWearable()
 {
   int proximityValue = readProximity();
 
-  Serial.println(proximityValue, DEC);
+  DEBUG_PRINTLNDEC(proximityValue);
 
   // There is something close to the device
   if (proximityValue > 3000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
-      Serial.println("Tranisition to advertising");
+      DEBUG_PRINTLN("Tranisition to advertising");
       stateMachine.transitionTo(GoToAdvertising);
     }
   } else {
@@ -174,7 +191,7 @@ void pollWearable()
       // Lock the device if the device has been set up
 
       if (isDeviceSetup()) {
-        Serial.println("Locking the device.");
+        DEBUG_PRINTLN("Locking the device.");
         deviceLocked = true;
       }
 
@@ -204,7 +221,7 @@ void advertising()
   typeOfConnect = "";
   setupOK = false;
 
-  Serial.println(F("---In advertising state---"));
+  DEBUG_PRINTLN(F("---In advertising state---"));
 
   char dataToAdvertiseArray[accountID.length() + 1];
   accountID.toCharArray(dataToAdvertiseArray, accountID.length() + 1);
@@ -243,9 +260,9 @@ void preConnect()
   handshaking = true;
 
   if ((typeOfConnect == "SETUP") && (!isDeviceSetup())) {
-    Serial.println(F("---In setup state---"));
+    DEBUG_PRINTLN(F("---In setup state---"));
 
-    Serial.println("Sending ok back..");
+    DEBUG_PRINTLN("Sending ok back..");
     sendMessage("OK");
 
     // Needs to receive ID from phone
@@ -258,7 +275,7 @@ void preConnect()
 
 
   } else if (typeOfConnect == "LOGIN" && isDeviceSetup() && !isDeviceLocked()) {
-    Serial.println(F("---In login state---"));
+    DEBUG_PRINTLN(F("---In login state---"));
 
     // Vibrate
     vibrate();
@@ -269,7 +286,7 @@ void preConnect()
     stateMachine.immediateTransitionTo(WaitForButtonInput);
 
   } else if (typeOfConnect == "UNLOCK" && isDeviceSetup() && isDeviceLocked()) {
-    Serial.println(F("---In unlock state---"));
+    DEBUG_PRINTLN(F("---In unlock state---"));
 
     typeOfConnect = "";
     unlockRequested = true;
@@ -277,12 +294,12 @@ void preConnect()
     stateMachine.transitionTo(Connected);
 
   } else if (typeOfConnect == "HEARTBEAT" && isDeviceSetup() && !isDeviceLocked()) {
-    Serial.println(F("---In heartbeat state---"));
+    DEBUG_PRINTLN(F("---In heartbeat state---"));
     stateMachine.transitionTo(Connected);
   }
 
   if (interruptTimer > interval) {
-    Serial.println(F("Didn't receive start of protocol, disconnecting."));
+    DEBUG_PRINTLN(F("Didn't receive start of protocol, disconnecting."));
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
@@ -296,7 +313,7 @@ void waitForButtonInput()
   if (digitalRead(INTERRUPT_PIN)) {
     // Weird case where we're getting all the bits set
     if ((interruptSource != 255) && (interruptSource & B00100000)) {
-      Serial.println("Double tap");
+      DEBUG_PRINTLN("Double tap");
       vibrateOnce();
       accel.disableReadings();
       stateMachine.transitionTo(Connected);
@@ -304,7 +321,7 @@ void waitForButtonInput()
   }
 
   if (interruptTimer > interval) {
-    Serial.println(F("Didn't receive tap acknowledgement, cancelling."));
+    DEBUG_PRINTLN(F("Didn't receive tap acknowledgement, cancelling."));
     RFduinoBLE.end();
     accel.disableReadings();
     stateMachine.transitionTo(Advertising);
@@ -314,20 +331,20 @@ void waitForButtonInput()
 
 void didConnect()
 {
-  Serial.println(F("---In connected state---"));
+  DEBUG_PRINTLN(F("---In connected state---"));
 
   String randomString = generate128BitRandom();
 
   if (randomString == "ERROR")
   {
-    Serial.println("Error generating random number, resetting");
+    DEBUG_PRINTLN("Error generating random number, resetting");
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
 
   sentRandom = randomString;
-  Serial.println(F("Sending Random Number"));
-  Serial.println(randomString);
+  DEBUG_PRINTLN(F("Sending Random Number"));
+  DEBUG_PRINTLN(randomString);
   sendMessage(randomString);
   stateMachine.transitionTo(WaitingForCipher);
 }
@@ -340,7 +357,7 @@ void resetTimer()
 void waitingID()
 {
   if (isDeviceSetup() == true) {
-    Serial.println(F("---Received an ID from phone--"));
+    DEBUG_PRINTLN(F("---Received an ID from phone--"));
 
     // Send serial number as response
     sendMessage(serialNum);
@@ -350,7 +367,7 @@ void waitingID()
   }
 
   if (interruptTimer > interval) {
-    Serial.println(F("Didn't receive ID, disconnecting."));
+    DEBUG_PRINTLN(F("Didn't receive ID, disconnecting."));
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
@@ -359,7 +376,7 @@ void waitingID()
 void waitingAck()
 {
   if ((setupOK == true) && (accountID != "Nimble")) {
-    Serial.println(F("---Received an Ack from phone--"));
+    DEBUG_PRINTLN(F("---Received an Ack from phone--"));
 
     // Write the UserID provided by the phone
     writeUserID(accountID);
@@ -371,7 +388,7 @@ void waitingAck()
   }
 
   if (interruptTimer > interval) {
-    Serial.println(F("Didn't receive acknowledgment, disconnecting."));
+    DEBUG_PRINTLN(F("Didn't receive acknowledgment, disconnecting."));
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
@@ -380,14 +397,14 @@ void waitingAck()
 void waitingCipher()
 {
   if (serverCipher != "") {
-    Serial.println(F("---Decoding received cipher--"));
+    DEBUG_PRINTLN(F("---Decoding received cipher--"));
 
     // Hardware has a MAC
     uint8_t hexString[32];
     uint8_t data[16];
     uint8_t MAC[16];
 
-    Serial.println(serverCipher);
+    DEBUG_PRINTLN(serverCipher);
 
     // Convert the string to uint8
     uint8FromString(serverCipher, hexString);
@@ -398,16 +415,16 @@ void waitingCipher()
 
     if (decryptedString == "ERROR")
     {
-      Serial.println("Error generating cipher, resetting");
+      DEBUG_PRINTLN("Error generating cipher, resetting");
       RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
     }
 
     // Convert the uint8 back to a string
-    Serial.println(decryptedString);
+    DEBUG_PRINTLN(decryptedString);
 
     if (decryptedString == sentRandom) {
-      Serial.println(F("Got the correct random value"));
+      DEBUG_PRINTLN(F("Got the correct random value"));
       sendMessage("OK");
 
       // If it was an unlock request - see if successful, unlock and return to advertising
@@ -415,7 +432,7 @@ void waitingCipher()
         deviceLocked = false;
         unlockRequested = false;
         isAdvertising = false;
-        Serial.println(F("Unlock was successful."));
+        DEBUG_PRINTLN(F("Unlock was successful."));
         RFduinoBLE.end();
         stateMachine.transitionTo(ResetVariables);
       } else {
@@ -424,15 +441,15 @@ void waitingCipher()
       }
 
     } else {
-      Serial.println(decryptedString);
-      Serial.println(F("Incorrect random, fuck off server"));
+      DEBUG_PRINTLN(decryptedString);
+      DEBUG_PRINTLN(F("Incorrect random, fuck off server"));
       RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
     }
   }
 
   if (interruptTimer > interval) {
-    Serial.println(F("Didn't receive ciphertext, disconnecting."));
+    DEBUG_PRINTLN(F("Didn't receive ciphertext, disconnecting."));
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
@@ -441,7 +458,7 @@ void waitingCipher()
 void waitingRandom()
 {
   if (serverRandom != "") {
-    Serial.println(F("---Encrypting received random--"));
+    DEBUG_PRINTLN(F("---Encrypting received random--"));
     // Hardware has a MAC
     uint8_t hexString[16];
 
@@ -452,20 +469,20 @@ void waitingRandom()
 
     if (encryptedString == "ERROR")
     {
-      Serial.println("Error generating cipher, resetting");
+      DEBUG_PRINTLN("Error generating cipher, resetting");
       RFduinoBLE.end();
       stateMachine.transitionTo(Advertising);
     }
     // Convert the uint8 back to a string
     sendMessage(encryptedString);
-    Serial.println("Sending encrypted string");
-    Serial.println(encryptedString);
+    DEBUG_PRINTLN("Sending encrypted string");
+    DEBUG_PRINTLN(encryptedString);
 
     stateMachine.transitionTo(ResetVariables);
   }
 
   if (interruptTimer > interval) {
-    Serial.println(F("Didn't receive random challenge, disconnecting."));
+    DEBUG_PRINTLN(F("Didn't receive random challenge, disconnecting."));
     RFduinoBLE.end();
     stateMachine.transitionTo(ResetVariables);
   }
@@ -478,7 +495,7 @@ void resetVariables()
   // Sleep the AES chip
   aes132c_standby();
 
-  Serial.println(F("---In reset state---"));
+  DEBUG_PRINTLN(F("---In reset state---"));
 
   serverCipher = "";
   serverRandom = "";
@@ -492,22 +509,22 @@ void resetVariables()
 
 void RFduinoBLE_onConnect()
 {
-  Serial.println(F("Got connection"));
+  DEBUG_PRINTLN(F("Got connection"));
 
   stateMachine.transitionTo(PreConnect);
 }
 
 void RFduinoBLE_onDisconnect()
 {
-  Serial.println(F("Disconnected"));
+  DEBUG_PRINTLN(F("Disconnected"));
 }
 
 /* Sending and receiving */
 
 void receivedMessage(String message)
 {
-  Serial.println(F("---Received message--"));
-  Serial.println(message);
+  DEBUG_PRINTLN(F("---Received message--"));
+  DEBUG_PRINTLN(message);
 
   if (stateMachine.isInState(WaitingForCipher)) {
     serverCipher = message;
@@ -517,12 +534,12 @@ void receivedMessage(String message)
     typeOfConnect = message;
   } else if (stateMachine.isInState(WaitingForID)) {
     accountID = message;
-    Serial.println("Still in state");
+    DEBUG_PRINTLN("Still in state");
   } else if (stateMachine.isInState(WaitingForAck)) {
-    Serial.println("Setting OK");
+    DEBUG_PRINTLN("Setting OK");
     if (message == "OK") setupOK = true;
   } else {
-    Serial.println(F("Unknown state"));
+    DEBUG_PRINTLN(F("Unknown state"));
   }
 }
 
@@ -752,16 +769,16 @@ void uint8FromString(String message, uint8_t* data)
 
 void PrintHex8(const __FlashStringHelper* message, uint8_t *data, uint8_t length) // prints 8-bit data in hex with leading zeroes
 {
-  Serial.println(message);
-  Serial.print("0x");
+  DEBUG_PRINTLN(message);
+  DEBUG_PRINT("0x");
   for (int i = 0; i < length; i++) {
     if (data[i] < 0x10) {
-      Serial.print("0");
+      DEBUG_PRINT("0");
     }
-    Serial.print(data[i], HEX);
-    Serial.print(" ");
+    DEBUG_PRINTHEX(data[i]);
+    DEBUG_PRINT(" ");
   }
-  Serial.println("");
+  DEBUG_PRINTLN("");
 }
 
 // writeByte(address, data) writes a single byte of data to address
