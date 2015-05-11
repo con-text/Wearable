@@ -19,6 +19,7 @@ void setup() {
   Serial.println(randomString);
   
   /* UNCOMMENT FOR DECRYPTION */
+  /*
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer2);
   
@@ -40,18 +41,22 @@ void setup() {
     
   for (int i = 0; i < sizeof(rxBuffer); i++) {
     Serial.println(rxBuffer[i], HEX);
-  }
+  }*/
    
       
- /* UNCOMMENT FOR WRITING KEYS 
+ // UNCOMMENT FOR WRITING KEYS 
    uint8_t keyOne[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
     
   writeKey(keyOne, 0);
- // uint16_t address = 0xF200;
- // uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN + 16] = {0};
-  //aes132m_block_read(address, 16, rxBuffer);
+  uint16_t address = 0xF200;
+  uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN + 16] = {0};
+  aes132m_block_read(address, 16, rxBuffer);
+  
+  for (int i = 0; i < sizeof(rxBuffer); i++) {
+    Serial.println(rxBuffer[i], HEX);
+  }
   
   /* Uncomment for generating nonce 
   uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN] = {0};

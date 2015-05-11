@@ -55,6 +55,7 @@ bool setupOK = false;
 
 bool deviceLocked = false;
 bool unlockRequested = false;
+bool handshaking = false;
 
 String serverRandom;
 String serverCipher;
@@ -91,58 +92,62 @@ void setup()
 {
   // Setup serial
   Serial.begin(9600);
-  
+
   // Setup vibration motor
   pinMode(vibrationPin, OUTPUT);
   pinMode(INTERRUPT_PIN, INPUT);
-  
+
   // For I2C
   Wire.begin();
-  
+
   // Uncomment this to wipe the current ID written to the chip
   //resetUserID();
-  
+
   serialNum = readSerialNumber();
   accountID = readUserID();
-  
+
   Serial.println(serialNum);
   Serial.println(accountID);
-  
+
   //Serial.println(readZoneConfig());
- 
+
   // Setup the proximity sensor
   byte temp = readByte(PRODUCT_ID);
   if (temp != 0x11) {
-   Serial.print("Something's wrong. Not reading correct ID for proximity sensor.");
-   abort();
-  } 
-   
+    Serial.print("Something's wrong. Not reading correct ID for proximity sensor.");
+    abort();
+  }
+
   /* Now some VNCL400 initialization stuff
     Feel free to play with any of these values, but check the datasheet first!*/
   writeByte(AMBIENT_PARAMETER, 0x0F);  // Single conversion mode, 128 averages
   writeByte(IR_CURRENT, 1);  // Set IR current to 10mA
   writeByte(PROXIMITY_FREQ, 2);  // 781.25 kHz
   writeByte(PROXIMITY_MOD, 0x81);  // 129, recommended by Vishay
-  
+
   if (isDeviceSetup()) {
     deviceLocked = true;
   }
-    
+
   t.every(5000, pollWearable);
-  
+
   while (!accel.begin()) {
-      Serial.println("No ADXL345 detected...");
-      abort();
-  } 
-  
-  Serial.println("Found ADXL345 :)"); 
+    Serial.println("No ADXL345 detected...");
+    abort();
+  }
+
+  Serial.println("Found ADXL345 :)");
   accel.setupTapInterrupts();
 }
 
 void loop()
 {
+  if (handshaking == false) {
+    RFduino_ULPDelay(350);
+  }
+
   t.update();
-  
+
   stateMachine.update();
 }
 
@@ -154,11 +159,11 @@ void initialSetupBegin()
 void pollWearable()
 {
   int proximityValue = readProximity();
-  
+
   Serial.println(proximityValue, DEC);
-  
+
   // There is something close to the device
-  if (proximityValue > 4000) {
+  if (proximityValue > 3000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
@@ -169,17 +174,17 @@ void pollWearable()
     // Not on wrist and is advertising so stop
     if (isAdvertising == true) {
       isAdvertising = false;
-      
+
       // Lock the device if the device has been set up
-      
+
       if (isDeviceSetup()) {
         Serial.println("Locking the device.");
         deviceLocked = true;
       }
-      
-      RFduinoBLE.end(); 
+
+      RFduinoBLE.end();
     }
-  }  
+  }
 }
 
 void goToAdvertising()
@@ -191,91 +196,94 @@ void goToAdvertising()
 
 void advertising()
 {
+  handshaking = false;
+  
   // The AES chip should be sleeping
   aes132c_sleep();
-  
+
   // Reset everything
   serverCipher = "";
   serverRandom = "";
   sentRandom = "";
   typeOfConnect = "";
   setupOK = false;
-  
+
   Serial.println(F("---In advertising state---"));
-      
+
   char dataToAdvertiseArray[accountID.length() + 1];
   accountID.toCharArray(dataToAdvertiseArray, accountID.length() + 1);
-  
+
   // Not on wrist - not advertising
-  
+
   // If on wrist:
   // Not setup, advertising 4E1F1FB0-95C9-4C54-88CB-6B9F3192CDD1
   // Setup but locked, advertising 79E7C777-15B4-406A-84C2-DEB389EA85E1
   // Setup and unlocked, advertising 2220
 
   if (!isDeviceSetup()) {
-      RFduinoBLE.customUUID = "4E1F1FB0-95C9-4C54-88CB-6B9F3192CDD1";
+    RFduinoBLE.customUUID = "4E1F1FB0-95C9-4C54-88CB-6B9F3192CDD1";
   } else if (isDeviceLocked()) {
-      RFduinoBLE.customUUID = "79E7C777-15B4-406A-84C2-DEB389EA85E1";      
+    RFduinoBLE.customUUID = "79E7C777-15B4-406A-84C2-DEB389EA85E1";
   } else {
-      RFduinoBLE.customUUID = "";   
+    RFduinoBLE.customUUID = "";
   }
 
   // Broadcast Bluetooth
-  
+
   if (isDeviceLocked()) {
     RFduinoBLE.advertisementInterval = 1000;
   } else {
     RFduinoBLE.advertisementInterval = 200;
   }
- 
+
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
   RFduinoBLE.deviceName = "Nimble";
   RFduinoBLE.begin();
 }
 
 void preConnect()
-{  
-  
+{
+  handshaking = true;
+
   if ((typeOfConnect == "SETUP") && (!isDeviceSetup())) {
     Serial.println(F("---In setup state---"));
-    
+
     Serial.println("Sending ok back..");
     sendMessage("OK");
-    
+
     // Needs to receive ID from phone
     // Send serial number back (serialNum)
     // Upon acknowledge, write ID to chip
-    
-    typeOfConnect = "";
-    
-    stateMachine.immediateTransitionTo(WaitingForID);
-    
-    
-  } else if (typeOfConnect == "LOGIN" && isDeviceSetup() && !isDeviceLocked()) {
-    Serial.println(F("---In login state---"));
-    
-    // Vibrate
-    vibrate();
-    
+
     typeOfConnect = "";
 
-    // Wait for a button input  
+    stateMachine.immediateTransitionTo(WaitingForID);
+
+
+  } else if (typeOfConnect == "LOGIN" && isDeviceSetup() && !isDeviceLocked()) {
+    Serial.println(F("---In login state---"));
+
+    // Vibrate
+    vibrate();
+
+    typeOfConnect = "";
+
+    // Wait for a button input
     stateMachine.immediateTransitionTo(WaitForButtonInput);
-  
+
   } else if (typeOfConnect == "UNLOCK" && isDeviceSetup() && isDeviceLocked()) {
     Serial.println(F("---In unlock state---"));
-    
+
     typeOfConnect = "";
     unlockRequested = true;
 
     stateMachine.transitionTo(Connected);
-  
+
   } else if (typeOfConnect == "HEARTBEAT" && isDeviceSetup() && !isDeviceLocked()) {
     Serial.println(F("---In heartbeat state---"));
     stateMachine.transitionTo(Connected);
   }
-  
+
   if (interruptTimer > interval) {
     Serial.println(F("Didn't receive start of protocol, disconnecting."));
     RFduinoBLE.end();
@@ -286,8 +294,8 @@ void preConnect()
 void waitForButtonInput()
 {
   int interruptSource = accel.readInterruptSource();
-   // we use a digitalRead instead of attachInterrupt so that we can use delay()
-  if(digitalRead(INTERRUPT_PIN)) {
+  // we use a digitalRead instead of attachInterrupt so that we can use delay()
+  if (digitalRead(INTERRUPT_PIN)) {
     // Weird case where we're getting all the bits set
     if ((interruptSource != 255) && (interruptSource & B00100000)) {
       Serial.println("Double tap");
@@ -295,7 +303,7 @@ void waitForButtonInput()
       stateMachine.transitionTo(Connected);
     }
   }
-  
+
   if (interruptTimer > interval) {
     Serial.println(F("Didn't receive tap acknowledgement, cancelling."));
     RFduinoBLE.end();
@@ -307,7 +315,7 @@ void waitForButtonInput()
 void didConnect()
 {
   Serial.println(F("---In connected state---"));
- 
+
   String randomString = generate128BitRandom();
 
   if (randomString == "ERROR")
@@ -333,14 +341,14 @@ void waitingID()
 {
   if (isDeviceSetup() == true) {
     Serial.println(F("---Received an ID from phone--"));
-    
+
     // Send serial number as response
     sendMessage(serialNum);
-    
+
     // Now wait for an acknowledgement before writing ID to device
     stateMachine.immediateTransitionTo(WaitingForAck);
   }
-  
+
   if (interruptTimer > interval) {
     Serial.println(F("Didn't receive ID, disconnecting."));
     RFduinoBLE.end();
@@ -355,13 +363,13 @@ void waitingAck()
 
     // Write the UserID provided by the phone
     writeUserID(accountID);
-    
+
     delay(100);
-    
+
     RFduinoBLE.end();
     stateMachine.transitionTo(Advertising);
   }
-  
+
   if (interruptTimer > interval) {
     Serial.println(F("Didn't receive acknowledgment, disconnecting."));
     RFduinoBLE.end();
@@ -373,21 +381,21 @@ void waitingCipher()
 {
   if (serverCipher != "") {
     Serial.println(F("---Decoding received cipher--"));
-    
+
     // Hardware has a MAC
     uint8_t hexString[32];
     uint8_t data[16];
     uint8_t MAC[16];
-  
+
     Serial.println(serverCipher);
 
     // Convert the string to uint8
     uint8FromString(serverCipher, hexString);
-    
+
     memcpy(&MAC, &hexString, 16);
-    memcpy(&data, &hexString[16], 16);  
+    memcpy(&data, &hexString[16], 16);
     String decryptedString = decryptMessage(0, data, MAC);
-    
+
     if (decryptedString == "ERROR")
     {
       Serial.println("Error generating cipher, resetting");
@@ -401,7 +409,7 @@ void waitingCipher()
     if (decryptedString == sentRandom) {
       Serial.println(F("Got the correct random value"));
       sendMessage("OK");
-      
+
       // If it was an unlock request - see if successful, unlock and return to advertising
       if (unlockRequested == true) {
         deviceLocked = false;
@@ -411,10 +419,10 @@ void waitingCipher()
         RFduinoBLE.end();
         stateMachine.transitionTo(ResetVariables);
       } else {
-        // In the normal protocol, now await random from other party 
+        // In the normal protocol, now await random from other party
         stateMachine.transitionTo(WaitingForRandom);
       }
-      
+
     } else {
       Serial.println(decryptedString);
       Serial.println(F("Incorrect random, fuck off server"));
@@ -434,12 +442,12 @@ void waitingRandom()
 {
   if (serverRandom != "") {
     Serial.println(F("---Encrypting received random--"));
-    // Hardware has a MAC     
+    // Hardware has a MAC
     uint8_t hexString[16];
 
     // Convert the string to uint8
     uint8FromString(serverRandom, hexString);
-    
+
     String encryptedString = encryptMessageString(0, hexString);
 
     if (encryptedString == "ERROR")
@@ -465,9 +473,11 @@ void waitingRandom()
 
 void resetVariables()
 {
+  handshaking = false;
+  
   // Sleep the AES chip
   aes132c_standby();
-  
+
   Serial.println(F("---In reset state---"));
 
   serverCipher = "";
@@ -506,11 +516,11 @@ void receivedMessage(String message)
   } else if (stateMachine.isInState(PreConnect)) {
     typeOfConnect = message;
   } else if (stateMachine.isInState(WaitingForID)) {
-    accountID = message; 
+    accountID = message;
     Serial.println("Still in state");
   } else if (stateMachine.isInState(WaitingForAck)) {
     Serial.println("Setting OK");
-    if (message == "OK") setupOK = true;    
+    if (message == "OK") setupOK = true;
   } else {
     Serial.println(F("Unknown state"));
   }
@@ -601,22 +611,22 @@ String decryptMessage(int key, uint8_t dataToDecrypt[16], uint8_t inMac[16])
   // Send the nonce
   uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer);
-  
+
   if (rxBuffer[1] != 0x00) {
     return "ERROR";
   }
-  
+
   // Send the decrypt
-  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN+16] = {0};
+  uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN + 16] = {0};
   decrypt(inMac, dataToDecrypt, rxBuffer2);
-      
+
   if (rxBuffer2[1] != 0x00) {
     return "ERROR";
   }
-  
+
   // Remove the packet size and checksums
   cleanupData(rxBuffer2, sizeof(rxBuffer2));
-    
+
   // Turn the data array into a string
   String decryptedMessage = stringFromUInt8(rxBuffer2, sizeof(rxBuffer2));
 
@@ -628,21 +638,21 @@ String encryptMessageString(int key, uint8_t data[16])
   // Send the nonce
   uint8_t rxBuffer[AES132_RESPONSE_SIZE_MIN] = {0};
   nonce(rxBuffer);
-  
+
   if (rxBuffer[1] != 0x00) {
     return "ERROR";
   }
-  
+
   uint8_t rxBuffer2[AES132_RESPONSE_SIZE_MIN + 32] = {0};
   encrypt(data, rxBuffer2);
-    
+
   if (rxBuffer2[1] != 0x00) {
     return "ERROR";
   }
-  
+
   // Remove the packet size and checksums
   cleanupData(rxBuffer2, sizeof(rxBuffer2));
-    
+
   // Turn the data array into a string
   String encryptedMessage = stringFromUInt8(rxBuffer2, sizeof(rxBuffer2));
 
@@ -652,13 +662,7 @@ String encryptMessageString(int key, uint8_t data[16])
 /* Vibration Motor */
 void vibrate()
 {
-  digitalWrite(vibrationPin, HIGH);
-  delay(100);
-  digitalWrite(vibrationPin, LOW);
-  delay(100);
-  digitalWrite(vibrationPin, HIGH);
-  delay(100);
-  digitalWrite(vibrationPin, LOW);
+  vibrateOnce();
 }
 
 void vibrateOnce()
@@ -674,9 +678,9 @@ String readSerialNumber()
 {
   uint8_t serialNumber[AES132_RESPONSE_SIZE_MIN + 8] = {0};
   uint16_t address = 0xF000;
-   
+
   aes132m_block_read(address, 8, serialNumber);
-  
+
   return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 8);
 }
 
@@ -684,9 +688,9 @@ String readZoneConfig()
 {
   uint8_t serialNumber[AES132_RESPONSE_SIZE_MIN + 4] = {0};
   uint16_t address = 0xF0C0;
-   
+
   aes132m_block_read(address, 4, serialNumber);
-  
+
   return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 4);
 }
 
@@ -694,9 +698,9 @@ String readZoneConfig()
 String readUserMemory(uint16_t address)
 {
   uint8_t serialNumber[AES132_RESPONSE_SIZE_MIN + 25] = {0};
-   
+
   aes132m_block_read(address, 25, serialNumber);
-  
+
   return stringFromUInt8(serialNumber, AES132_RESPONSE_SIZE_MIN + 25);
 }
 
@@ -713,7 +717,7 @@ String stringFromUInt8(uint8_t* data, int dataLength)
   String newString;
 
   for (int i = 0; i < dataLength; i++) {
-    
+
     // An edge case because the data that has been cleaned up has been nulled, but the data could also be null
     if (data[i] == NULL) {
       if ( (i == 0) || (i == 1) || (i == dataLength - 1) || (i == dataLength - 2)) {
@@ -722,7 +726,7 @@ String stringFromUInt8(uint8_t* data, int dataLength)
       hexMessage += "00";
       continue;
     }
-    
+
     newString = "";
     // Special case for 0
     if (data[i] < 0x10)
@@ -773,12 +777,12 @@ void writeByte(byte address, byte data)
 byte readByte(byte address)
 {
   byte data;
-  
+
   Wire.beginTransmission(VCNL4000_ADDRESS);
   Wire.write(address);
   Wire.endTransmission();
   Wire.requestFrom(VCNL4000_ADDRESS, 1);
-  while(!Wire.available())
+  while (!Wire.available())
     ;
   data = Wire.read();
 
@@ -790,44 +794,44 @@ unsigned int readProximity()
 {
   unsigned int data;
   byte temp;
-  
+
   temp = readByte(COMMAND_0);
   writeByte(COMMAND_0, temp | 0x08);  // command the sensor to perform a proximity measure
-  
-  while(!(readByte(COMMAND_0)&0x20)) 
+
+  while (!(readByte(COMMAND_0) & 0x20))
     ;  // Wait for the proximity data ready bit to be set
   data = readByte(PROXIMITY_RESULT_MSB) << 8;
   data |= readByte(PROXIMITY_RESULT_LSB);
-  
+
   return data;
 }
 
 void writeUserID(String accID) {
-  
+
   char userID[accID.length() + 1];
   accID.toCharArray(userID, accID.length() + 1);
-  
+
   //char userID[] = "10155232305430398";
   //char userID[] = "1234567";
-  
+
   // Stored in ASCII representation e.g. 0 = 30, 1 = 31, 2 = 32 etc.
   uint16_t address = 0x0000;
-  
+
   // Make array large enough to hold
   // Length (2 bytes)
   // Empty byte 0x00
   // UserID in ASCII, one character at a time
   uint8_t uid[sizeof(userID) + 3];
-  
+
   String uidLength = String(strlen(userID));
   uid[0] = uidLength[0];
   uid[1] = uidLength[1];
   uid[2] = 0x00;
-  
+
   for (int i = 0; i < strlen(userID); i++) {
-    uid[i+3] = userID[i];
+    uid[i + 3] = userID[i];
   }
- 
+
   aes132c_write_memory(sizeof(userID) + 3 - 1, address, uid);
 
 }
@@ -835,50 +839,50 @@ void writeUserID(String accID) {
 void resetUserID() {
   uint16_t address = 0x0000;
   uint8_t uid[10];
-  
+
   for (int i = 0; i < 10; i++) {
     uid[i] = 0xFF;
   }
-  
+
   aes132c_write_memory(10, address, uid);
 }
 
 String readUserID() {
-  
+
   // Read length of UserID from start of User Zone 0
   uint16_t address = 0x0000;
   uint8_t userIDLength[AES132_RESPONSE_SIZE_MIN + 2] = {0};
   aes132m_block_read(address, 2, userIDLength);
-  
+
   String userIDString = stringFromUInt8(userIDLength, AES132_RESPONSE_SIZE_MIN + 2);
-  
+
   // No UserID has been written yet, must be a new device
   if (userIDString[2] == 'F') {
     return String("Nimble");
-  } 
-  
+  }
+
   // If a UserID has been written, read the correct number of characters
   int userIDchars = 0;
   userIDchars = asciiToNumerical(userIDString).toInt();
-  
+
   address += 3;
   uint8_t userIDStr[AES132_RESPONSE_SIZE_MIN + userIDchars];
   memset( userIDStr, 0, (AES132_RESPONSE_SIZE_MIN + userIDchars)*sizeof(uint8_t) );
-   
+
   aes132m_block_read(address, userIDchars, userIDStr);
-  
+
   return asciiToNumerical(stringFromUInt8(userIDStr, AES132_RESPONSE_SIZE_MIN + userIDchars));
 }
 
 String asciiToNumerical(String asciiString) {
-  
-  String trimmedPacket = asciiString.substring(2,asciiString.length()-4);
-  String fullString; 
-   
+
+  String trimmedPacket = asciiString.substring(2, asciiString.length() - 4);
+  String fullString;
+
   for (int i = 0; i < trimmedPacket.length(); i = i + 2) {
-    fullString += String(trimmedPacket.substring(i,i+2).toInt()-30);
+    fullString += String(trimmedPacket.substring(i, i + 2).toInt() - 30);
   }
-  
+
   return fullString;
 }
 
