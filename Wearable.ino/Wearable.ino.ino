@@ -139,7 +139,7 @@ void setup()
 void loop()
 {
   if (handshaking == false) {
-    RFduino_ULPDelay(350);
+    RFduino_ULPDelay(500);
   }
 
   t.update();
@@ -234,6 +234,7 @@ void advertising()
 
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
   RFduinoBLE.deviceName = "Nimble";
+  RFduinoBLE.txPowerLevel = 0;
   RFduinoBLE.begin();
 }
 
