@@ -71,7 +71,6 @@ bool handshaking = false;
 String serverRandom;
 String serverCipher;
 
-
 bool cipherOK = false;
 
 const int vibrationPin = 3;
@@ -251,7 +250,7 @@ void advertising()
 
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
   RFduinoBLE.deviceName = "Nimble";
-  RFduinoBLE.txPowerLevel = 0;
+  RFduinoBLE.txPowerLevel = -30;
   RFduinoBLE.begin();
 }
 
@@ -511,7 +510,7 @@ void RFduinoBLE_onConnect()
 {
   DEBUG_PRINTLN(F("Got connection"));
 
-  stateMachine.transitionTo(PreConnect);
+  stateMachine.immediateTransitionTo(PreConnect);
 }
 
 void RFduinoBLE_onDisconnect()
