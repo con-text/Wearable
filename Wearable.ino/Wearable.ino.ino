@@ -71,7 +71,6 @@ bool handshaking = false;
 String serverRandom;
 String serverCipher;
 
-
 bool cipherOK = false;
 
 const int vibrationPin = 3;
@@ -176,7 +175,7 @@ void pollWearable()
   DEBUG_PRINTLNDEC(proximityValue);
 
   // There is something close to the device
-  if (proximityValue > 3000) {
+  if (proximityValue > 2000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
@@ -278,7 +277,7 @@ void preConnect()
     DEBUG_PRINTLN(F("---In login state---"));
 
     // Vibrate
-    vibrate();
+    vibrateOnce();
 
     typeOfConnect = "";
 
@@ -308,6 +307,7 @@ void preConnect()
 void waitForButtonInput()
 {
   accel.enableReadings();
+  delay(50);
   int interruptSource = accel.readInterruptSource();
   // we use a digitalRead instead of attachInterrupt so that we can use delay()
   if (digitalRead(INTERRUPT_PIN)) {
@@ -512,7 +512,7 @@ void RFduinoBLE_onConnect()
 {
   DEBUG_PRINTLN(F("Got connection"));
 
-  stateMachine.transitionTo(PreConnect);
+  stateMachine.immediateTransitionTo(PreConnect);
 }
 
 void RFduinoBLE_onDisconnect()
@@ -678,11 +678,6 @@ String encryptMessageString(int key, uint8_t data[16])
 }
 
 /* Vibration Motor */
-void vibrate()
-{
-  vibrateOnce();
-}
-
 void vibrateOnce()
 {
   digitalWrite(vibrationPin, HIGH);
