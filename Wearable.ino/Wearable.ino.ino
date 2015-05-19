@@ -176,7 +176,7 @@ void pollWearable()
   DEBUG_PRINTLNDEC(proximityValue);
 
   // There is something close to the device
-  if (proximityValue > 2000) {
+  if (proximityValue > 3000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
@@ -251,7 +251,7 @@ void advertising()
 
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
   RFduinoBLE.deviceName = "Nimble";
-  RFduinoBLE.txPowerLevel = 4;
+  RFduinoBLE.txPowerLevel = -20;
   RFduinoBLE.begin();
 }
 
