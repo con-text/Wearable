@@ -6,7 +6,7 @@
 #define AES_LIBRARY_DEBUG 1
 #define interval 5000
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
  #define DEBUG_PRINTLN(x)  Serial.println(x)
@@ -175,7 +175,7 @@ void pollWearable()
   DEBUG_PRINTLNDEC(proximityValue);
 
   // There is something close to the device
-  if (proximityValue > 3000) {
+  if (proximityValue > 2000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
@@ -432,6 +432,7 @@ void waitingCipher()
         unlockRequested = false;
         isAdvertising = false;
         DEBUG_PRINTLN(F("Unlock was successful."));
+        delay(100);
         RFduinoBLE.end();
         stateMachine.transitionTo(ResetVariables);
       } else {
