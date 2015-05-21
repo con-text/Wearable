@@ -175,7 +175,7 @@ void pollWearable()
   DEBUG_PRINTLNDEC(proximityValue);
 
   // There is something close to the device
-  if (proximityValue > 2000) {
+  if (proximityValue > 3000) {
     // And we're not advertising
     if (isAdvertising == false) {
       isAdvertising = true;
@@ -307,7 +307,6 @@ void preConnect()
 void waitForButtonInput()
 {
   accel.enableReadings();
-  delay(50);
   int interruptSource = accel.readInterruptSource();
   // we use a digitalRead instead of attachInterrupt so that we can use delay()
   if (digitalRead(INTERRUPT_PIN)) {
