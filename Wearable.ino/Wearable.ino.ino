@@ -250,7 +250,7 @@ void advertising()
 
   RFduinoBLE.advertisementData = dataToAdvertiseArray;
   RFduinoBLE.deviceName = "Nimble";
-  RFduinoBLE.txPowerLevel = -20;
+  RFduinoBLE.txPowerLevel = 0;
   RFduinoBLE.begin();
 }
 
